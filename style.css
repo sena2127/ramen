@@ -344,6 +344,72 @@ body[data-theme="dark"] .nav-item.active {
   background: var(--primary-50);
 }
 
+.btn-sheets-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-subtle);
+  color: var(--text-main);
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid var(--border-subtle);
+  transition: all var(--transition-fast);
+}
+
+.btn-sheets-shortcut:hover {
+  border-color: #0f9d58;
+}
+
+.text-sheets {
+  color: #0f9d58 !important;
+}
+
+.sheets-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-light);
+  display: inline-block;
+}
+
+.sheets-status-dot.connected {
+  background: #0f9d58;
+  box-shadow: 0 0 0 2px rgba(15, 157, 88, 0.25);
+  animation: pulseDot 2s infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.btn-sheets-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: all var(--transition-fast);
+}
+
+.btn-sheets-pill:hover {
+  border-color: #0f9d58;
+  color: var(--text-main);
+}
+
+.btn-sheets-pill.connected {
+  background: rgba(15, 157, 88, 0.08);
+  border-color: rgba(15, 157, 88, 0.4);
+  color: #0f9d58;
+}
+
 .btn-quick-report {
   display: flex;
   align-items: center;
@@ -1372,6 +1438,11 @@ body[data-theme="dark"] .cal-day-cell.selected {
   box-shadow: var(--shadow-sm);
 }
 
+.settings-card.sheets-card {
+  border-color: rgba(15, 157, 88, 0.4);
+  background: linear-gradient(180deg, var(--bg-surface), var(--bg-surface-subtle));
+}
+
 .settings-card.danger-card { border-color: rgba(239, 68, 68, 0.3); }
 
 .settings-card-header {
@@ -1394,13 +1465,148 @@ body[data-theme="dark"] .cal-day-cell.selected {
   flex-shrink: 0;
 }
 
+.settings-icon-bubble.sheets-icon {
+  background: rgba(15, 157, 88, 0.12);
+  color: #0f9d58;
+}
+
 .settings-icon-bubble.danger-icon {
   background: var(--danger-light);
   color: var(--danger-main);
 }
 
+.settings-title-group {
+  flex: 1;
+}
+
+.sheets-badge-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sheets-badge {
+  font-size: 0.725rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--bg-surface-subtle);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.sheets-badge.connected {
+  background: rgba(15, 157, 88, 0.12);
+  color: #0f9d58;
+  border-color: rgba(15, 157, 88, 0.4);
+}
+
 .settings-title { font-size: 1.1rem; font-weight: 800; }
 .settings-desc { font-size: 0.825rem; color: var(--text-muted); }
+
+/* Sheets Form Layout */
+.sheets-form-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.sheets-url-input-box {
+  display: flex;
+  gap: 8px;
+}
+
+.sheets-url-input-box input {
+  flex: 1;
+}
+
+.form-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.sheets-actions-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Sheets Guide Modal */
+.sheets-guide-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.guide-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.guide-step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  background: var(--bg-surface-subtle);
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+}
+
+.step-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #0f9d58;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.875rem;
+}
+
+.step-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gas-code-preview {
+  width: 100%;
+  height: 180px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  background: #1e293b;
+  color: #f8fafc;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  resize: vertical;
+  line-height: 1.4;
+  white-space: pre;
+}
+
+.link-external {
+  color: #0f9d58;
+  font-weight: 700;
+  text-decoration: underline;
+}
 
 .action-buttons-grid {
   display: grid;

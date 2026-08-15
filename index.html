@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="シンプルで見やすい月間カレンダー付きモダン家計簿アプリ。日々の収支をカレンダー上で直感的に管理できます。">
+  <meta name="description" content="シンプルで見やすい月間カレンダー付きモダン家計簿アプリ。Googleスプレッドシートとのリアルタイム連携に対応。">
   <title>SmartKakeibo - カレンダー家計簿</title>
   
   <!-- Google Fonts -->
@@ -20,8 +19,8 @@
   <!-- Canvas Confetti for Celebration Effects -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 
-  <!-- App Styles -->
-  <link rel="stylesheet" href="style.css?v=20260815">
+  <!-- App Styles (キャッシュバスター付き) -->
+  <link rel="stylesheet" href="style.css?v=20260815_sheets">
 </head>
 <body data-theme="light">
 
@@ -53,7 +52,7 @@
         </button>
         <button class="nav-item" data-tab="settings" id="nav-settings">
           <i class="fa-solid fa-gear"></i>
-          <span>設定・データ</span>
+          <span>設定・シート連携</span>
         </button>
       </nav>
 
@@ -73,6 +72,12 @@
             <i class="fa-solid fa-rotate-left"></i> 今月に戻る
           </button>
         </div>
+
+        <button class="btn-sheets-shortcut" id="openSheetsSetupBtn" title="Googleスプレッドシート連携設定">
+          <i class="fa-solid fa-table-cells text-sheets"></i>
+          <span id="sidebarSheetsStatusLabel">シート未連携</span>
+          <span class="sheets-status-dot" id="sheetsStatusDot"></span>
+        </button>
 
         <button class="btn-quick-report" id="openMonthlyReportBtn">
           <i class="fa-solid fa-file-invoice"></i>
@@ -104,6 +109,12 @@
         </div>
 
         <div class="header-right">
+          <!-- Sheets Status Badge -->
+          <button class="btn-sheets-pill" id="headerSheetsPill" title="スプレッドシート連携設定を開く">
+            <i class="fa-solid fa-table-cells text-sheets"></i>
+            <span id="headerSheetsStatusText">シート未連携</span>
+          </button>
+
           <div class="mobile-month-nav">
             <button class="btn-icon-round" id="mobilePrevMonthBtn" aria-label="前月">
               <i class="fa-solid fa-chevron-left"></i>
@@ -186,7 +197,7 @@
         <div class="calendar-view-layout">
           <!-- Calendar Main Container -->
           <div class="calendar-card">
-            <!-- Weekday Header -->
+            <!-- Weekday Header (8 Columns) -->
             <div class="calendar-weekdays">
               <div class="weekday-cell sun">日</div>
               <div class="weekday-cell">月</div>
@@ -200,7 +211,7 @@
 
             <!-- Calendar Days Grid -->
             <div class="calendar-grid" id="calendarDaysGrid">
-              <!-- Dynamically rendered day cells -->
+              <!-- Dynamically rendered day & week-total cells -->
             </div>
           </div>
 
@@ -347,15 +358,58 @@
       <!-- TAB 4: SETTINGS & DATA MANAGEMENT -->
       <section class="tab-pane" id="pane-settings">
         <div class="settings-container">
-          <!-- Data Management Box -->
+          <!-- Google Sheets Integration Box -->
+          <div class="settings-card sheets-card">
+            <div class="settings-card-header">
+              <div class="settings-icon-bubble sheets-icon">
+                <i class="fa-solid fa-table-cells"></i>
+              </div>
+              <div class="settings-title-group">
+                <div class="sheets-badge-title">
+                  <h3 class="settings-title">Google スプレッドシート リアルタイム連携</h3>
+                  <span class="sheets-badge" id="settingsSheetsBadge">未接続</span>
+                </div>
+                <p class="settings-desc">家計簿に入力した収支を、Google スプレッドシートにリアルタイムで自動蓄積・同期できます。</p>
+              </div>
+            </div>
+
+            <div class="settings-card-body">
+              <div class="sheets-form-wrap">
+                <label for="sheetsWebAppUrlInput" class="form-label">
+                  Google Apps Script (GAS) ウェブアプリ URL
+                </label>
+                <div class="sheets-url-input-box">
+                  <input type="url" id="sheetsWebAppUrlInput" class="form-input" placeholder="https://script.google.com/macros/s/.../exec">
+                  <button class="btn-primary btn-sm" id="saveSheetsUrlBtn">
+                    <i class="fa-solid fa-check"></i> URLを保存
+                  </button>
+                </div>
+                <p class="form-hint">※ Google スプレッドシートに専用のスクリプトを貼り付けるだけで無料で簡単に連携できます。</p>
+              </div>
+
+              <div class="sheets-actions-row">
+                <button class="btn-secondary" id="openSheetsGuideModalBtn">
+                  <i class="fa-solid fa-book-open"></i> 連携手順 ＆ スクリプトコードを表示
+                </button>
+                <button class="btn-secondary" id="syncAllToSheetsBtn">
+                  <i class="fa-solid fa-cloud-arrow-up text-sheets"></i> スプレッドシートへ全件送信
+                </button>
+                <button class="btn-secondary" id="fetchFromSheetsBtn">
+                  <i class="fa-solid fa-cloud-arrow-down text-sheets"></i> スプレッドシートから読み込む
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- File Backup Box -->
           <div class="settings-card">
             <div class="settings-card-header">
               <div class="settings-icon-bubble">
                 <i class="fa-solid fa-database"></i>
               </div>
               <div>
-                <h3 class="settings-title">データバックアップ & 連携</h3>
-                <p class="settings-desc">家計簿データのCSV書き出しやJSONバックアップ、復元を行えます。</p>
+                <h3 class="settings-title">データファイル出力 & バックアップ</h3>
+                <p class="settings-desc">CSVファイル書き出しやJSONバックアップの保存・復元を行えます。</p>
               </div>
             </div>
             <div class="settings-card-body">
@@ -384,14 +438,6 @@
                   </div>
                   <input type="file" id="importJsonFileInput" accept=".json" style="display: none;">
                 </label>
-
-                <button class="btn-action-tile" id="loadSampleDataBtn">
-                  <i class="fa-solid fa-wand-magic-sparkles"></i>
-                  <div class="tile-text">
-                    <span class="tile-title">サンプルデータを投入</span>
-                    <span class="tile-desc">デモ用のリアルな収支データを生成</span>
-                  </div>
-                </button>
               </div>
             </div>
           </div>
@@ -421,8 +467,8 @@
                 <i class="fa-solid fa-triangle-exclamation"></i>
               </div>
               <div>
-                <h3 class="settings-title">データのリセット</h3>
-                <p class="settings-desc">保存されている全ての家計簿データ（収支記録）を消去します。</p>
+                <h3 class="settings-title">データのリセット（初期化）</h3>
+                <p class="settings-desc">保存されている全ての収支データを消去して、空の状態から新しく記録を開始します。</p>
               </div>
             </div>
             <div class="settings-card-body">
@@ -555,6 +601,75 @@
     </div>
   </div>
 
+  <!-- MODAL: GOOGLE SPREADSHEET SETUP GUIDE -->
+  <div class="modal-backdrop" id="sheetsGuideModal" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-lg">
+      <div class="modal-header">
+        <div class="report-header-title">
+          <i class="fa-solid fa-table-cells text-sheets"></i>
+          <h3 class="modal-title">Google スプレッドシート連携ガイド（無料・約2分）</h3>
+        </div>
+        <button class="btn-modal-close" id="closeSheetsGuideModalBtn" aria-label="閉じる">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="modal-body sheets-guide-body">
+        <div class="guide-steps-list">
+          <div class="guide-step">
+            <div class="step-badge">1</div>
+            <div class="step-content">
+              <strong>Google スプレッドシートを新規作成</strong>
+              <p><a href="https://sheets.new" target="_blank" rel="noopener noreferrer" class="link-external">sheets.new <i class="fa-solid fa-arrow-up-right-from-square"></i></a> を開いて新しいスプレッドシートを作成し、タイトルを「家計簿データ」などに設定します。</p>
+            </div>
+          </div>
+
+          <div class="guide-step">
+            <div class="step-badge">2</div>
+            <div class="step-content">
+              <strong>Apps Script を開く</strong>
+              <p>スプレッドシート上部メニューの「<strong>拡張機能</strong>」→「<strong>Apps Script</strong>」をクリックします。</p>
+            </div>
+          </div>
+
+          <div class="guide-step">
+            <div class="step-badge">3</div>
+            <div class="step-content">
+              <div class="step-code-header">
+                <strong>以下のコードをコピーして貼り付け（全上書き）</strong>
+                <button class="btn-secondary btn-sm" id="copyGasCodeBtn">
+                  <i class="fa-regular fa-copy"></i> コードをコピー
+                </button>
+              </div>
+              <textarea class="gas-code-preview" id="gasCodeTextarea" readonly></textarea>
+            </div>
+          </div>
+
+          <div class="guide-step">
+            <div class="step-badge">4</div>
+            <div class="step-content">
+              <strong>ウェブアプリとしてデプロイ</strong>
+              <p>右上の「<strong>デプロイ</strong>」→「<strong>新しいデプロイ</strong>」を選択し、歯車アイコンから「<strong>ウェブアプリ</strong>」を選択。<br>
+              ・<strong>次のユーザーとして実行</strong>: 「自分」<br>
+              ・<strong>アクセスできるユーザー</strong>: 「<strong>全員</strong>」<br>
+              に設定して「デプロイ」を押します。</p>
+            </div>
+          </div>
+
+          <div class="guide-step">
+            <div class="step-badge">5</div>
+            <div class="step-content">
+              <strong>発行された「ウェブアプリ URL」を本アプリに貼り付け</strong>
+              <p>デプロイ後に表示されるURL（`https://script.google.com/macros/s/.../exec`）をコピーし、本アプリの設定画面のURL欄に貼り付けて「URLを保存」を押せば完了です！</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-primary" id="closeSheetsGuideFooterBtn">閉じる</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: MONTHLY REPORT -->
   <div class="modal-backdrop" id="monthlyReportModal" aria-hidden="true">
     <div class="modal-dialog modal-dialog-lg">
@@ -579,7 +694,7 @@
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
-  <!-- App Script -->
-  <script src="app.js?v=20260815"></script>
+  <!-- App Script (キャッシュバスター付き) -->
+  <script src="app.js?v=20260815_sheets"></script>
 </body>
 </html>

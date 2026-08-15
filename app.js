@@ -1,13 +1,107 @@
 /**
- * SmartKakeibo - カレンダー家計簿アプリケーション コアスクリプト
+ * SmartKakeibo - カレンダー家計簿 ＆ Googleスプレッドシート連携スクリプト
  */
 
 // ==========================================
 // 1. 定数・カテゴリ定義・初期設定
 // ==========================================
 
-const STORAGE_KEY_RECORDS = 'smartkakeibo_records_v3';
+const STORAGE_KEY_RECORDS = 'smartkakeibo_records_v4_clean';
 const STORAGE_KEY_THEME = 'smartkakeibo_theme_v3';
+const STORAGE_KEY_SHEETS_URL = 'smartkakeibo_sheets_url_v1';
+
+// Google Apps Script 用のコードテンプレート（ユーザーがスプレッドシートに貼るコード）
+const GAS_SCRIPT_CODE = `function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    
+    // ヘッダー行がなければ自動生成
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow(["ID", "日付", "収支区分", "カテゴリ", "金額", "支払方法", "メモ", "固定費", "登録日時"]);
+      sheet.getRange(1, 1, 1, 9).setBackground("#0f9d58").setFontColor("#ffffff").setFontWeight("bold");
+    }
+
+    if (data.action === "add") {
+      var r = data.record;
+      sheet.appendRow([r.id, r.date, r.type === "expense" ? "支出" : "収入", r.categoryName || r.category, r.amount, r.paymentName || r.payment, r.note || "", r.isFixed ? "固定費" : "", r.createdAt]);
+      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (data.action === "edit") {
+      var rows = sheet.getDataRange().getValues();
+      var r = data.record;
+      for (var i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]) === String(r.id)) {
+          sheet.getRange(i + 1, 2).setValue(r.date);
+          sheet.getRange(i + 1, 3).setValue(r.type === "expense" ? "支出" : "収入");
+          sheet.getRange(i + 1, 4).setValue(r.categoryName || r.category);
+          sheet.getRange(i + 1, 5).setValue(r.amount);
+          sheet.getRange(i + 1, 6).setValue(r.paymentName || r.payment);
+          sheet.getRange(i + 1, 7).setValue(r.note || "");
+          sheet.getRange(i + 1, 8).setValue(r.isFixed ? "固定費" : "");
+          break;
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (data.action === "delete") {
+      var rows = sheet.getDataRange().getValues();
+      for (var i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]) === String(data.id)) {
+          sheet.deleteRow(i + 1);
+          break;
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (data.action === "syncAll") {
+      var lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        sheet.deleteRows(2, lastRow - 1);
+      }
+      if (data.records && data.records.length > 0) {
+        data.records.forEach(function(r) {
+          sheet.appendRow([r.id, r.date, r.type === "expense" ? "支出" : "収入", r.categoryName || r.category, r.amount, r.paymentName || r.payment, r.note || "", r.isFixed ? "固定費" : "", r.createdAt]);
+        });
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", count: data.records ? data.records.length : 0 })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var rows = sheet.getDataRange().getValues();
+    var records = [];
+    if (rows.length > 1) {
+      for (var i = 1; i < rows.length; i++) {
+        var row = rows[i];
+        if (!row[0]) continue;
+        records.push({
+          id: String(row[0]),
+          date: String(row[1]).substring(0, 10),
+          type: row[2] === "支出" ? "expense" : "income",
+          category: String(row[3]),
+          amount: Number(row[4]) || 0,
+          payment: String(row[5]),
+          note: String(row[6] || ""),
+          isFixed: row[7] === "固定費",
+          createdAt: row[8] ? String(row[8]) : ""
+        });
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", records: records })).setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
 
 // 支出カテゴリマスター
 const EXPENSE_CATEGORIES = [
@@ -51,7 +145,8 @@ const AppState = {
   currentMonth: getCurrentYearMonth(), // "YYYY-MM"
   selectedDate: getTodayDateString(),  // "YYYY-MM-DD"
   currentTab: 'calendar',
-  records: [],
+  records: [],                         // 空の状態でスタート（サンプルデータなし）
+  sheetsUrl: '',                       // Google Apps Script Webhook URL
   activeEditingId: null,
   charts: {
     categoryDonut: null,
@@ -92,14 +187,14 @@ function formatCurrency(amount) {
 
 function getCategoryInfo(categoryId, type = 'expense') {
   const pool = type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
-  const found = pool.find(c => c.id === categoryId);
+  const found = pool.find(c => c.id === categoryId || c.name === categoryId);
   if (found) return found;
 
   const allPool = [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES];
-  const anyFound = allPool.find(c => c.id === categoryId);
+  const anyFound = allPool.find(c => c.id === categoryId || c.name === categoryId);
   if (anyFound) return anyFound;
 
-  return { id: categoryId, name: '未分類', icon: 'fa-circle-question', color: '#94a3b8' };
+  return { id: categoryId, name: categoryId || '未分類', icon: 'fa-circle-question', color: '#94a3b8' };
 }
 
 function showToast(message, type = 'info') {
@@ -119,11 +214,11 @@ function showToast(message, type = 'info') {
   setTimeout(() => {
     toast.classList.add('fade-out');
     setTimeout(() => toast.remove(), 300);
-  }, 3000);
+  }, 3200);
 }
 
 // ==========================================
-// 4. データストア層 (LocalStorage)
+// 4. データストア層 (LocalStorage & Sheets)
 // ==========================================
 
 function loadStateFromStorage() {
@@ -132,8 +227,15 @@ function loadStateFromStorage() {
     if (raw) {
       AppState.records = JSON.parse(raw);
     } else {
-      AppState.records = generateSampleRecords();
+      // 初期値は完全な空配列（サンプルデータなし）
+      AppState.records = [];
       saveRecordsToStorage();
+    }
+
+    // スプレッドシート連携URLロード
+    const savedUrl = localStorage.getItem(STORAGE_KEY_SHEETS_URL);
+    if (savedUrl) {
+      AppState.sheetsUrl = savedUrl;
     }
   } catch (e) {
     console.error('Storage error:', e);
@@ -145,121 +247,150 @@ function saveRecordsToStorage() {
   localStorage.setItem(STORAGE_KEY_RECORDS, JSON.stringify(AppState.records));
 }
 
-function generateSampleRecords() {
-  const currentYM = getCurrentYearMonth();
-  const [curYear, curMonth] = currentYM.split('-').map(Number);
-  const samples = [];
-  const addDays = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+// ==========================================
+// 5. Googleスプレッドシート・リアルタイム連携エンジン
+// ==========================================
 
-  for (let offset = -2; offset <= 0; offset++) {
-    let year = curYear;
-    let month = curMonth + offset;
-    if (month < 1) {
-      month += 12;
-      year -= 1;
-    }
+function updateSheetsStatusUI() {
+  const isConnected = !!AppState.sheetsUrl;
 
-    // 収入: 給与
-    samples.push({
-      id: 'sample_' + Math.random().toString(36).substr(2, 9),
-      type: 'income',
-      amount: 320000,
-      category: 'salary',
-      date: addDays(year, month, 25),
-      payment: 'bank',
-      note: '月給手取り',
-      isFixed: true,
-      createdAt: new Date().toISOString()
-    });
+  const sidebarStatus = document.getElementById('sidebarSheetsStatusLabel');
+  const statusDot = document.getElementById('sheetsStatusDot');
+  const headerStatus = document.getElementById('headerSheetsStatusText');
+  const headerPill = document.getElementById('headerSheetsPill');
+  const settingsBadge = document.getElementById('settingsSheetsBadge');
+  const urlInput = document.getElementById('sheetsWebAppUrlInput');
 
-    if (month % 2 === 0) {
-      samples.push({
-        id: 'sample_' + Math.random().toString(36).substr(2, 9),
-        type: 'income',
-        amount: 35000,
-        category: 'side_job',
-        date: addDays(year, month, 15),
-        payment: 'bank',
-        note: '副業案件報酬',
-        isFixed: false,
-        createdAt: new Date().toISOString()
-      });
-    }
-
-    // 固定支出
-    samples.push({
-      id: 'sample_' + Math.random().toString(36).substr(2, 9),
-      type: 'expense',
-      amount: 75000,
-      category: 'housing',
-      date: addDays(year, month, 27),
-      payment: 'bank',
-      note: '家賃',
-      isFixed: true,
-      createdAt: new Date().toISOString()
-    });
-
-    samples.push({
-      id: 'sample_' + Math.random().toString(36).substr(2, 9),
-      type: 'expense',
-      amount: 12400,
-      category: 'utilities',
-      date: addDays(year, month, 20),
-      payment: 'credit',
-      note: '電気・ガス・水道代',
-      isFixed: true,
-      createdAt: new Date().toISOString()
-    });
-
-    samples.push({
-      id: 'sample_' + Math.random().toString(36).substr(2, 9),
-      type: 'expense',
-      amount: 6800,
-      category: 'communication',
-      date: addDays(year, month, 18),
-      payment: 'credit',
-      note: 'スマホ・光回線料金',
-      isFixed: true,
-      createdAt: new Date().toISOString()
-    });
-
-    // 日常支出
-    const dailyList = [
-      { d: 2, amt: 4800, cat: 'food', note: 'スーパー週末まとめ買い', pay: 'credit' },
-      { d: 5, amt: 1200, cat: 'food', note: 'ランチ定食', pay: 'e-money' },
-      { d: 6, amt: 3400, cat: 'daily', note: '日用品・洗剤買い足し', pay: 'credit' },
-      { d: 8, amt: 3500, cat: 'food', note: '食材調達', pay: 'credit' },
-      { d: 10, amt: 5000, cat: 'transport', note: '交通系ICチャージ', pay: 'e-money' },
-      { d: 11, amt: 980, cat: 'food', note: 'カフェ休憩', pay: 'e-money' },
-      { d: 12, amt: 7500, cat: 'entertainment', note: '友人とのディナー', pay: 'credit' },
-      { d: 14, amt: 5200, cat: 'food', note: 'スーパー食材まとめ買い', pay: 'credit' },
-      { d: 16, amt: 3980, cat: 'hobby', note: '書籍＆映画', pay: 'credit' },
-      { d: 17, amt: 2400, cat: 'food', note: 'デリバリー夕食', pay: 'e-money' },
-      { d: 21, amt: 4100, cat: 'food', note: '週末買い出し', pay: 'credit' },
-      { d: 24, amt: 1500, cat: 'food', note: 'ベーカリー＆カフェ', pay: 'cash' },
-      { d: 28, amt: 6400, cat: 'food', note: 'スーパー食材', pay: 'credit' }
-    ];
-
-    dailyList.forEach(item => {
-      samples.push({
-        id: 'sample_' + Math.random().toString(36).substr(2, 9),
-        type: 'expense',
-        amount: item.amt,
-        category: item.cat,
-        date: addDays(year, month, item.d),
-        payment: item.pay,
-        note: item.note,
-        isFixed: false,
-        createdAt: new Date().toISOString()
-      });
-    });
+  if (urlInput && !urlInput.value && AppState.sheetsUrl) {
+    urlInput.value = AppState.sheetsUrl;
   }
 
-  return samples;
+  if (isConnected) {
+    if (sidebarStatus) sidebarStatus.textContent = 'シート連携中';
+    if (statusDot) statusDot.className = 'sheets-status-dot connected';
+    if (headerStatus) headerStatus.textContent = '🟢 シート連携中';
+    if (headerPill) headerPill.className = 'btn-sheets-pill connected';
+    if (settingsBadge) {
+      settingsBadge.textContent = '連携中';
+      settingsBadge.className = 'sheets-badge connected';
+    }
+  } else {
+    if (sidebarStatus) sidebarStatus.textContent = 'シート未連携';
+    if (statusDot) statusDot.className = 'sheets-status-dot';
+    if (headerStatus) headerStatus.textContent = 'シート未連携';
+    if (headerPill) headerPill.className = 'btn-sheets-pill';
+    if (settingsBadge) {
+      settingsBadge.textContent = '未接続';
+      settingsBadge.className = 'sheets-badge';
+    }
+  }
+}
+
+function saveSheetsUrl(url) {
+  const cleanUrl = url.trim();
+  AppState.sheetsUrl = cleanUrl;
+  localStorage.setItem(STORAGE_KEY_SHEETS_URL, cleanUrl);
+  updateSheetsStatusUI();
+
+  if (cleanUrl) {
+    showToast('スプレッドシート連携URLを保存しました！', 'success');
+  } else {
+    showToast('スプレッドシート連携を解除しました', 'info');
+  }
+}
+
+/**
+ * スプレッドシートへリアルタイム送信 (add, edit, delete, syncAll)
+ */
+async function syncToSpreadsheet(action, payload) {
+  if (!AppState.sheetsUrl) return;
+
+  try {
+    let bodyData = { action };
+
+    if (action === 'add' || action === 'edit') {
+      const cat = getCategoryInfo(payload.category, payload.type);
+      const pay = PAYMENT_METHODS[payload.payment]?.name || payload.payment;
+      bodyData.record = {
+        ...payload,
+        categoryName: cat.name,
+        paymentName: pay
+      };
+    } else if (action === 'delete') {
+      bodyData.id = payload.id;
+    } else if (action === 'syncAll') {
+      bodyData.records = AppState.records.map(r => {
+        const cat = getCategoryInfo(r.category, r.type);
+        const pay = PAYMENT_METHODS[r.payment]?.name || r.payment;
+        return {
+          ...r,
+          categoryName: cat.name,
+          paymentName: pay
+        };
+      });
+    }
+
+    // Google Apps Script の Web App に送信
+    await fetch(AppState.sheetsUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(bodyData)
+    });
+
+    console.log(`Sheets synced: [${action}]`);
+  } catch (err) {
+    console.error('Sheets sync error:', err);
+  }
+}
+
+/**
+ * スプレッドシートから全件再読み込み
+ */
+async function loadFromSpreadsheet() {
+  if (!AppState.sheetsUrl) {
+    showToast('先にスプレッドシートのURLを設定してください', 'error');
+    return;
+  }
+
+  showToast('スプレッドシートからデータを取得中...', 'info');
+
+  try {
+    const res = await fetch(AppState.sheetsUrl);
+    const data = await res.json();
+
+    if (data && data.status === 'success' && Array.isArray(data.records)) {
+      AppState.records = data.records;
+      saveRecordsToStorage();
+      showToast(`スプレッドシートから ${data.records.length} 件のデータを読み込みました！`, 'success');
+      renderAll();
+    } else {
+      showToast('スプレッドシートからのデータ取得に失敗しました', 'error');
+    }
+  } catch (err) {
+    console.error('Fetch from sheets error:', err);
+    showToast('スプレッドシートにアクセスできませんでした。URLと公開設定（全員）を確認してください。', 'error');
+  }
+}
+
+/**
+ * 全データをスプレッドシートへ強制同期
+ */
+async function syncAllToSpreadsheet() {
+  if (!AppState.sheetsUrl) {
+    showToast('先にスプレッドシートのURLを設定してください', 'error');
+    return;
+  }
+
+  showToast('スプレッドシートへ全データを送信中...', 'info');
+  await syncToSpreadsheet('syncAll', {});
+  showToast(`スプレッドシートに ${AppState.records.length} 件のデータを同期しました！`, 'success');
 }
 
 // ==========================================
-// 5. 集計計算ロジック
+// 6. 集計計算ロジック
 // ==========================================
 
 function getMonthRecords(yearMonth = AppState.currentMonth) {
@@ -275,7 +406,7 @@ function calculateMonthSummary(yearMonth = AppState.currentMonth) {
 
   const categoryExpenses = {};
   const paymentBreakdown = {};
-  const dailyData = {}; // { "YYYY-MM-DD": { expense: 0, income: 0, count: 0 } }
+  const dailyData = {};
 
   records.forEach(r => {
     const amt = Number(r.amount) || 0;
@@ -318,11 +449,12 @@ function calculateMonthSummary(yearMonth = AppState.currentMonth) {
 }
 
 // ==========================================
-// 6. UI レンダリング
+// 7. UI レンダリング
 // ==========================================
 
 function renderAll() {
   updatePeriodHeader();
+  updateSheetsStatusUI();
   renderSummaryCards();
   renderCalendar();
   renderSelectedDayDetails();
@@ -360,7 +492,7 @@ function renderSummaryCards() {
 }
 
 // ==========================================
-// 7. カレンダー描画エンジン (Core - 週計対応)
+// 8. カレンダー描画エンジン (週計カラム対応)
 // ==========================================
 
 function renderCalendar() {
@@ -373,16 +505,13 @@ function renderCalendar() {
   const summary = calculateMonthSummary(AppState.currentMonth);
   const todayStr = getTodayDateString();
 
-  // 当月1日の曜日 (0:日〜6:土)
   const firstDayOfWeek = new Date(year, month - 1, 1).getDay();
-  // 当月の日数
   const totalDaysInMonth = new Date(year, month, 0).getDate();
-  // 前月の日数
   const prevMonthTotalDays = new Date(year, month - 1, 0).getDate();
 
   const allDayItems = [];
 
-  // 1. 前月の余白セル
+  // 1. 前月余白
   for (let i = firstDayOfWeek - 1; i >= 0; i--) {
     const dayNum = prevMonthTotalDays - i;
     let prevM = month - 1;
@@ -401,7 +530,7 @@ function renderCalendar() {
     });
   }
 
-  // 2. 当月の日付セル
+  // 2. 当月
   for (let d = 1; d <= totalDaysInMonth; d++) {
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dayOfWeek = new Date(year, month - 1, d).getDay();
@@ -418,7 +547,7 @@ function renderCalendar() {
     });
   }
 
-  // 3. 翌月の余白セル
+  // 3. 翌月余白
   const currentTotalCells = allDayItems.length;
   const nextMonthCells = (7 - (currentTotalCells % 7)) % 7;
 
@@ -439,7 +568,7 @@ function renderCalendar() {
     });
   }
 
-  // 4. 7日（1行）ごとに日セル＋「週計セル」を生成してグリッドに配置
+  // 4. 7日ごとに週計セル（行ごとの収支）を挟んで配置
   const totalWeeks = allDayItems.length / 7;
 
   for (let w = 0; w < totalWeeks; w++) {
@@ -448,7 +577,6 @@ function renderCalendar() {
     let weekIncome = 0;
     const weekDates = weekDays.map(item => item.dateStr);
 
-    // 7つの日セルを追加
     weekDays.forEach(item => {
       const cell = createCalendarCell({
         ...item,
@@ -456,13 +584,11 @@ function renderCalendar() {
       });
       grid.appendChild(cell);
 
-      // 週の合計を合算
       const dayData = summary.dailyData[item.dateStr] || { expense: 0, income: 0 };
       weekExpense += dayData.expense;
       weekIncome += dayData.income;
     });
 
-    // 8番目の「週計セル（行ごとの収支）」を追加
     const weekTotalCell = createWeekTotalCell({
       weekIndex: w + 1,
       weekExpense,
@@ -519,9 +645,7 @@ function createWeekTotalCell({ weekIndex, weekExpense, weekIncome, weekDates }) 
 
   let incHtml = '';
   if (weekIncome > 0) {
-    incHtml = `
-      <div class="cal-week-val cal-week-inc">+¥${formatCurrency(weekIncome)}</div>
-    `;
+    incHtml = `<div class="cal-week-val cal-week-inc">+¥${formatCurrency(weekIncome)}</div>`;
   }
 
   cell.innerHTML = `
@@ -538,7 +662,6 @@ function createWeekTotalCell({ weekIndex, weekExpense, weekIncome, weekDates }) 
     </div>
   `;
 
-  // 週計セルをクリックすると、その週の7日間の明細一覧を右側パネルに表示
   cell.addEventListener('click', () => {
     selectWeekTotal(weekIndex, weekDates, weekExpense, weekIncome);
   });
@@ -546,8 +669,21 @@ function createWeekTotalCell({ weekIndex, weekExpense, weekIncome, weekDates }) 
   return cell;
 }
 
+function selectCalendarDate(dateStr) {
+  AppState.selectedDate = dateStr;
+
+  document.querySelectorAll('.cal-day-cell').forEach(c => {
+    if (c.dataset.date === dateStr) {
+      c.classList.add('selected');
+    } else {
+      c.classList.remove('selected');
+    }
+  });
+
+  renderSelectedDayDetails();
+}
+
 function selectWeekTotal(weekIndex, weekDates, weekExpense, weekIncome) {
-  // カレンダーマスの選択解除
   document.querySelectorAll('.cal-day-cell').forEach(c => c.classList.remove('selected'));
 
   const label = document.getElementById('selectedDateLabel');
@@ -573,21 +709,6 @@ function selectWeekTotal(weekIndex, weekDates, weekExpense, weekIncome) {
       list.appendChild(createTransactionElement(r));
     });
   }
-}
-
-function selectCalendarDate(dateStr) {
-  AppState.selectedDate = dateStr;
-
-  // カレンダーマスの選択クラスを更新
-  document.querySelectorAll('.cal-day-cell').forEach(c => {
-    if (c.dataset.date === dateStr) {
-      c.classList.add('selected');
-    } else {
-      c.classList.remove('selected');
-    }
-  });
-
-  renderSelectedDayDetails();
 }
 
 function renderSelectedDayDetails() {
@@ -626,7 +747,7 @@ function renderSelectedDayDetails() {
 }
 
 // ==========================================
-// 8. 収支明細一覧 (Records Tab)
+// 9. 収支明細一覧 (Records Tab)
 // ==========================================
 
 function renderRecordsList() {
@@ -798,7 +919,7 @@ function createTransactionElement(record) {
 }
 
 // ==========================================
-// 9. 統計 & グラフ (Analytics Tab)
+// 10. 統計 & グラフ (Analytics Tab)
 // ==========================================
 
 function renderAnalytics() {
@@ -856,7 +977,6 @@ function renderCategoryDonutChart() {
     }
   });
 
-  // ランキングリスト
   const ranking = document.getElementById('topCategoriesList');
   if (ranking) {
     ranking.innerHTML = '';
@@ -990,7 +1110,7 @@ function renderMonthlyTrendChart() {
 }
 
 // ==========================================
-// 10. 取引モーダル制御 & CRUD
+// 11. 取引モーダル制御 & CRUD (リアルタイム連携)
 // ==========================================
 
 function openAddTransactionModal(presetDate = null) {
@@ -1102,9 +1222,10 @@ function handleTransactionFormSubmit(e) {
   }
 
   if (id) {
+    // 編集
     const index = AppState.records.findIndex(r => r.id === id);
     if (index !== -1) {
-      AppState.records[index] = {
+      const updatedRecord = {
         ...AppState.records[index],
         type,
         amount,
@@ -1115,9 +1236,14 @@ function handleTransactionFormSubmit(e) {
         isFixed,
         updatedAt: new Date().toISOString()
       };
+      AppState.records[index] = updatedRecord;
       showToast('記録を更新しました', 'success');
+
+      // スプレッドシートへリアルタイム同期
+      syncToSpreadsheet('edit', updatedRecord);
     }
   } else {
+    // 新規作成
     const newRecord = {
       id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
       type,
@@ -1131,6 +1257,9 @@ function handleTransactionFormSubmit(e) {
     };
     AppState.records.push(newRecord);
     showToast('収支を追加しました！', 'success');
+
+    // スプレッドシートへリアルタイム同期
+    syncToSpreadsheet('add', newRecord);
   }
 
   AppState.selectedDate = date;
@@ -1150,11 +1279,15 @@ function deleteTransaction(id) {
   AppState.records = AppState.records.filter(r => r.id !== id);
   saveRecordsToStorage();
   showToast('記録を削除しました', 'info');
+
+  // スプレッドシートへリアルタイム同期
+  syncToSpreadsheet('delete', { id });
+
   renderAll();
 }
 
 // ==========================================
-// 11. レポートモーダル
+// 12. レポート ＆ データ出力
 // ==========================================
 
 function openMonthlyReportModal() {
@@ -1222,10 +1355,6 @@ function openMonthlyReportModal() {
   showModal('monthlyReportModal');
 }
 
-// ==========================================
-// 12. データ連携 (CSV & JSON)
-// ==========================================
-
 function exportDataAsCSV() {
   if (AppState.records.length === 0) {
     showToast('エクスポートするデータがありません', 'error');
@@ -1260,7 +1389,7 @@ function exportDataAsCSV() {
 }
 
 function exportDataAsJSON() {
-  const data = { version: '3.0', exportDate: new Date().toISOString(), records: AppState.records };
+  const data = { version: '4.0', exportDate: new Date().toISOString(), records: AppState.records };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
 
@@ -1297,17 +1426,10 @@ function importDataFromJSON(file) {
 }
 
 function resetAllData() {
-  if (!confirm('本当に全データを初期化しますか？')) return;
+  if (!confirm('本当に全データを初期化しますか？\n保存されているすべての収支データが消去され、0件から開始できます。')) return;
   AppState.records = [];
   saveRecordsToStorage();
-  showToast('全データをリセットしました', 'info');
-  renderAll();
-}
-
-function loadSampleData() {
-  AppState.records = [...AppState.records, ...generateSampleRecords()];
-  saveRecordsToStorage();
-  showToast('サンプルデータを追加しました！', 'success');
+  showToast('全データをリセットしました。新しい家計簿を開始できます！', 'info');
   renderAll();
 }
 
@@ -1426,6 +1548,25 @@ function initCategoryFilterDropdown() {
   select.appendChild(optGroupInc);
 }
 
+function openSheetsGuideModal() {
+  const textarea = document.getElementById('gasCodeTextarea');
+  if (textarea) {
+    textarea.value = GAS_SCRIPT_CODE;
+  }
+  showModal('sheetsGuideModal');
+}
+
+function copyGasCode() {
+  const textarea = document.getElementById('gasCodeTextarea');
+  if (!textarea) return;
+  textarea.select();
+  navigator.clipboard.writeText(textarea.value).then(() => {
+    showToast('Apps Script コードをクリップボードにコピーしました！', 'success');
+  }).catch(() => {
+    showToast('コピーに失敗しました。テキストエリアから手動でコピーしてください', 'error');
+  });
+}
+
 function setupEventListeners() {
   // ナビゲーション
   document.querySelectorAll('.nav-item, .bottom-nav-item').forEach(btn => {
@@ -1488,6 +1629,22 @@ function setupEventListeners() {
     document.getElementById('txAmountInput').value = '';
   });
 
+  // スプレッドシート連携
+  document.getElementById('openSheetsSetupBtn')?.addEventListener('click', () => switchTab('settings'));
+  document.getElementById('headerSheetsPill')?.addEventListener('click', () => switchTab('settings'));
+  document.getElementById('openSheetsGuideModalBtn')?.addEventListener('click', openSheetsGuideModal);
+  document.getElementById('closeSheetsGuideModalBtn')?.addEventListener('click', () => closeModal('sheetsGuideModal'));
+  document.getElementById('closeSheetsGuideFooterBtn')?.addEventListener('click', () => closeModal('sheetsGuideModal'));
+  document.getElementById('copyGasCodeBtn')?.addEventListener('click', copyGasCode);
+
+  document.getElementById('saveSheetsUrlBtn')?.addEventListener('click', () => {
+    const input = document.getElementById('sheetsWebAppUrlInput');
+    if (input) saveSheetsUrl(input.value);
+  });
+
+  document.getElementById('syncAllToSheetsBtn')?.addEventListener('click', syncAllToSpreadsheet);
+  document.getElementById('fetchFromSheetsBtn')?.addEventListener('click', loadFromSpreadsheet);
+
   // レポート
   document.getElementById('openMonthlyReportBtn')?.addEventListener('click', openMonthlyReportModal);
   document.getElementById('closeReportModalBtn')?.addEventListener('click', () => closeModal('monthlyReportModal'));
@@ -1536,7 +1693,6 @@ function setupEventListeners() {
       e.target.value = '';
     }
   });
-  document.getElementById('loadSampleDataBtn')?.addEventListener('click', loadSampleData);
   document.getElementById('resetAllDataBtn')?.addEventListener('click', resetAllData);
 
   // モーダル背景クリック
