@@ -2173,22 +2173,23 @@ body[data-theme="dark"] .calc-preview-val {
 }
 
 .calc-btn {
-  height: 44px;
+  height: 46px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   user-select: none;
-  transition: all 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
+  touch-action: manipulation;
+  transition: all 0.1s ease-out;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .calc-btn:active {
-  transform: scale(0.93);
+  transform: scale(0.92);
 }
 
 /* Number Keys */

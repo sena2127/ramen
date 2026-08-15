@@ -20,7 +20,7 @@
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 
   <!-- App Styles (キャッシュバスター付き) -->
-  <link rel="stylesheet" href="style.css?v=20260815_calc">
+  <link rel="stylesheet" href="style.css?v=20260815_calc_v2">
 </head>
 <body data-theme="light">
 
@@ -542,19 +542,21 @@
         <!-- Amount Input Field & Calculator -->
         <div class="form-group amount-group">
           <div class="amount-label-row">
-            <label for="txAmountInput" class="form-label">金額 (円) <span class="required-star">*</span></label>
-            <button type="button" class="btn-calc-toggle" id="toggleCalcKeypadBtn" title="電卓キーパッドの表示切替">
-              <i class="fa-solid fa-calculator"></i>
-              <span id="calcToggleText">電卓を閉じる</span>
-            </button>
+            <label class="form-label" style="margin-bottom:0;">金額 (円) <span class="required-star">*</span></label>
+            <div class="calc-mode-switch">
+              <button type="button" class="btn-calc-toggle" id="toggleCalcKeypadBtn" title="入力方法を切り替え">
+                <i class="fa-solid fa-keyboard" id="calcToggleIcon"></i>
+                <span id="calcToggleText">直接入力に切替</span>
+              </button>
+            </div>
           </div>
 
           <!-- Calculator Display Box -->
           <div class="calc-display-box" id="calcDisplayBox">
-            <div class="calc-expr-row" id="calcExprRow" style="min-height: 18px;"></div>
+            <div class="calc-expr-row" id="calcExprRow"></div>
             <div class="amount-input-box">
               <span class="currency-prefix">¥</span>
-              <input type="text" inputmode="numeric" id="txAmountInput" class="form-input-amount" placeholder="0" required autofocus autocomplete="off">
+              <input type="text" id="txAmountInput" class="form-input-amount" placeholder="0" readonly autocomplete="off">
               <div class="calc-preview-val" id="calcPreviewVal" style="display: none;"></div>
             </div>
           </div>

@@ -1387,144 +1387,195 @@ function renderMonthlyTrendChart() {
 // ==========================================
 
 const CalcEngine = {
-  expression: '',       // 式の文字列 (例: "350+120*2")
-  isCalculated: false,  // ＝を押した直後フラグ
-  keypadVisible: true,  // 電卓キーパッド表示状態
+  currentVal: '0',      // 画面に大きく表示されている数値文字列
+  previousVal: null,    // 演算子を押す前の数値 (Number)
+  operation: null,      // 現在の演算子 ('+', '-', '*', '/')
+  waitingForNext: false,// 演算子を押した直後で、次の数字入力を待っている状態
+  exprDisplay: '',      // 式表示行 (例: "350 ＋ 120 ＝")
+  keypadVisible: true,  // 電卓表示フラグ
 
   init() {
-    this.expression = '';
-    this.isCalculated = false;
+    this.currentVal = '0';
+    this.previousVal = null;
+    this.operation = null;
+    this.waitingForNext = false;
+    this.exprDisplay = '';
+    this.keypadVisible = true;
+
+    const keypadEl = document.getElementById('calcKeypad');
+    const toggleText = document.getElementById('calcToggleText');
+    const toggleIcon = document.getElementById('calcToggleIcon');
+    const input = document.getElementById('txAmountInput');
+
+    if (keypadEl) keypadEl.classList.remove('collapsed');
+    if (toggleText) toggleText.textContent = '直接入力に切替';
+    if (toggleIcon) toggleIcon.className = 'fa-solid fa-keyboard';
+    if (input) input.readOnly = true;
+
     this.updateUI();
   },
 
-  setVal(val) {
-    this.expression = val ? String(val) : '';
-    this.isCalculated = false;
+  setVal(amount) {
+    const num = Number(amount) || 0;
+    this.currentVal = String(num);
+    this.previousVal = null;
+    this.operation = null;
+    this.waitingForNext = false;
+    this.exprDisplay = '';
+    this.keypadVisible = true;
+
+    const keypadEl = document.getElementById('calcKeypad');
+    const toggleText = document.getElementById('calcToggleText');
+    const toggleIcon = document.getElementById('calcToggleIcon');
+    const input = document.getElementById('txAmountInput');
+
+    if (keypadEl) keypadEl.classList.remove('collapsed');
+    if (toggleText) toggleText.textContent = '直接入力に切替';
+    if (toggleIcon) toggleIcon.className = 'fa-solid fa-keyboard';
+    if (input) input.readOnly = true;
+
     this.updateUI();
   },
 
   appendNum(numStr) {
-    if (this.isCalculated) {
-      this.expression = '';
-      this.isCalculated = false;
-    }
-    
-    if (this.expression === '0' && numStr !== '00') {
-      this.expression = numStr;
-    } else if (this.expression === '0' && numStr === '00') {
-      this.expression = '0';
+    if (this.waitingForNext || this.currentVal === '0') {
+      if (numStr === '00') {
+        this.currentVal = '0';
+      } else {
+        this.currentVal = numStr;
+      }
+      this.waitingForNext = false;
     } else {
-      this.expression += numStr;
+      if (this.currentVal.length < 10) {
+        this.currentVal += numStr;
+      }
     }
     this.updateUI();
   },
 
   appendOp(op) {
-    if (!this.expression) {
-      if (op === '-') {
-        this.expression = '-';
-      }
-      this.updateUI();
-      return;
+    const currentNum = Number(this.currentVal) || 0;
+    const opSymbol = { '+': '＋', '-': '−', '*': '×', '/': '÷' }[op] || op;
+
+    if (this.previousVal !== null && this.operation && !this.waitingForNext) {
+      const res = this.calculate(this.previousVal, currentNum, this.operation);
+      this.currentVal = String(res);
+      this.previousVal = res;
+    } else {
+      this.previousVal = currentNum;
     }
 
-    this.isCalculated = false;
-    const lastChar = this.expression.slice(-1);
-    if (['+', '-', '*', '/'].includes(lastChar)) {
-      this.expression = this.expression.slice(0, -1) + op;
-    } else {
-      this.expression += op;
+    this.operation = op;
+    this.waitingForNext = true;
+    this.exprDisplay = `${formatCurrency(this.previousVal)} ${opSymbol}`;
+    this.updateUI();
+  },
+
+  calculate(n1, n2, op) {
+    let res = 0;
+    switch (op) {
+      case '+': res = n1 + n2; break;
+      case '-': res = n1 - n2; break;
+      case '*': res = n1 * n2; break;
+      case '/': res = n2 !== 0 ? n1 / n2 : 0; break;
+      default: res = n2;
     }
+    return Math.max(0, Math.round(res));
+  },
+
+  executeEquals() {
+    if (this.previousVal === null || !this.operation) return;
+    const currentNum = Number(this.currentVal) || 0;
+    const opSymbol = { '+': '＋', '-': '−', '*': '×', '/': '÷' }[this.operation] || this.operation;
+    
+    this.exprDisplay = `${formatCurrency(this.previousVal)} ${opSymbol} ${formatCurrency(currentNum)} ＝`;
+    const res = this.calculate(this.previousVal, currentNum, this.operation);
+    this.currentVal = String(res);
+    this.previousVal = null;
+    this.operation = null;
+    this.waitingForNext = true;
     this.updateUI();
   },
 
   backspace() {
-    if (this.isCalculated) {
-      this.expression = '';
-      this.isCalculated = false;
-    } else if (this.expression.length > 0) {
-      this.expression = this.expression.slice(0, -1);
+    if (this.waitingForNext) return;
+    if (this.currentVal.length > 1) {
+      this.currentVal = this.currentVal.slice(0, -1);
+    } else {
+      this.currentVal = '0';
     }
     this.updateUI();
   },
 
   clear() {
-    this.expression = '';
-    this.isCalculated = false;
+    this.currentVal = '0';
+    this.previousVal = null;
+    this.operation = null;
+    this.waitingForNext = false;
+    this.exprDisplay = '';
     this.updateUI();
   },
 
-  addQuick(addVal) {
-    const currentTotal = this.evaluate();
-    const newTotal = (currentTotal || 0) + Number(addVal);
-    this.expression = String(newTotal);
-    this.isCalculated = true;
-    this.updateUI();
-  },
-
-  evaluate() {
-    if (!this.expression) return 0;
-    try {
-      const cleanExpr = this.expression.replace(/[^0-9+\-*/.]/g, '');
-      if (!cleanExpr) return 0;
-      const trimmed = cleanExpr.replace(/[+\-*/]+$/, '');
-      if (!trimmed) return 0;
-      return Math.max(0, Math.round(Function(`'use strict'; return (${trimmed})`)() || 0));
-    } catch {
-      return 0;
-    }
-  },
-
-  executeEquals() {
-    if (!this.expression) return;
-    const result = this.evaluate();
-    this.expression = String(result);
-    this.isCalculated = true;
+  addQuick(addAmount) {
+    const cur = Number(this.currentVal) || 0;
+    const nextVal = cur + Number(addAmount);
+    this.currentVal = String(Math.max(0, nextVal));
+    this.waitingForNext = false;
     this.updateUI();
   },
 
   getFinalAmount() {
     const input = document.getElementById('txAmountInput');
-    if (input && input.value !== this.expression) {
-      this.expression = input.value;
+    if (!this.keypadVisible && input) {
+      return Number(input.value) || 0;
     }
-    return this.evaluate();
+
+    if (this.previousVal !== null && this.operation && !this.waitingForNext) {
+      const currentNum = Number(this.currentVal) || 0;
+      return this.calculate(this.previousVal, currentNum, this.operation);
+    }
+    return Number(this.currentVal) || 0;
   },
 
   toggleKeypad() {
     this.keypadVisible = !this.keypadVisible;
     const keypadEl = document.getElementById('calcKeypad');
     const toggleText = document.getElementById('calcToggleText');
-    if (keypadEl) {
-      keypadEl.classList.toggle('collapsed', !this.keypadVisible);
-    }
-    if (toggleText) {
-      toggleText.textContent = this.keypadVisible ? '電卓を閉じる' : '電卓を開く';
+    const toggleIcon = document.getElementById('calcToggleIcon');
+    const input = document.getElementById('txAmountInput');
+
+    if (keypadEl) keypadEl.classList.toggle('collapsed', !this.keypadVisible);
+
+    if (this.keypadVisible) {
+      if (toggleText) toggleText.textContent = '直接入力に切替';
+      if (toggleIcon) toggleIcon.className = 'fa-solid fa-keyboard';
+      if (input) {
+        input.readOnly = true;
+        input.value = this.currentVal;
+      }
+    } else {
+      if (toggleText) toggleText.textContent = '電卓に切替';
+      if (toggleIcon) toggleIcon.className = 'fa-solid fa-calculator';
+      if (input) {
+        input.readOnly = false;
+        input.focus();
+        input.select();
+      }
     }
   },
 
   updateUI() {
     const input = document.getElementById('txAmountInput');
     const exprRow = document.getElementById('calcExprRow');
-    const previewEl = document.getElementById('calcPreviewVal');
     if (!input) return;
 
-    input.value = this.expression;
+    input.value = this.currentVal === '0' ? '' : this.currentVal;
+    if (this.currentVal === '0') {
+      input.placeholder = '0';
+    }
 
-    const hasOp = /[+\-*/]/.test(this.expression);
-    if (hasOp && exprRow && previewEl) {
-      const displayExpr = this.expression
-        .replace(/\+/g, ' ＋ ')
-        .replace(/-/g, ' − ')
-        .replace(/\*/g, ' × ')
-        .replace(/\//g, ' ÷ ');
-      exprRow.textContent = displayExpr;
-      const previewRes = this.evaluate();
-      previewEl.textContent = `= ¥${formatCurrency(previewRes)}`;
-      previewEl.style.display = 'block';
-    } else {
-      if (exprRow) exprRow.textContent = '';
-      if (previewEl) previewEl.style.display = 'none';
+    if (exprRow) {
+      exprRow.textContent = this.exprDisplay;
     }
   }
 };
@@ -2069,9 +2120,7 @@ function setupEventListeners() {
 
   const txAmountInput = document.getElementById('txAmountInput');
   txAmountInput?.addEventListener('input', (e) => {
-    CalcEngine.expression = e.target.value;
-    CalcEngine.isCalculated = false;
-    CalcEngine.updateUI();
+    CalcEngine.currentVal = e.target.value;
   });
 
   // 電卓キーパッドボタン
