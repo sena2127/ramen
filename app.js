@@ -1383,17 +1383,161 @@ function renderMonthlyTrendChart() {
 }
 
 // ==========================================
-// 11. 取引モーダル制御 & CRUD (リアルタイム連携)
+// 11. 電卓エンジン & 取引モーダル制御 (リアルタイム連携)
 // ==========================================
+
+const CalcEngine = {
+  expression: '',       // 式の文字列 (例: "350+120*2")
+  isCalculated: false,  // ＝を押した直後フラグ
+  keypadVisible: true,  // 電卓キーパッド表示状態
+
+  init() {
+    this.expression = '';
+    this.isCalculated = false;
+    this.updateUI();
+  },
+
+  setVal(val) {
+    this.expression = val ? String(val) : '';
+    this.isCalculated = false;
+    this.updateUI();
+  },
+
+  appendNum(numStr) {
+    if (this.isCalculated) {
+      this.expression = '';
+      this.isCalculated = false;
+    }
+    
+    if (this.expression === '0' && numStr !== '00') {
+      this.expression = numStr;
+    } else if (this.expression === '0' && numStr === '00') {
+      this.expression = '0';
+    } else {
+      this.expression += numStr;
+    }
+    this.updateUI();
+  },
+
+  appendOp(op) {
+    if (!this.expression) {
+      if (op === '-') {
+        this.expression = '-';
+      }
+      this.updateUI();
+      return;
+    }
+
+    this.isCalculated = false;
+    const lastChar = this.expression.slice(-1);
+    if (['+', '-', '*', '/'].includes(lastChar)) {
+      this.expression = this.expression.slice(0, -1) + op;
+    } else {
+      this.expression += op;
+    }
+    this.updateUI();
+  },
+
+  backspace() {
+    if (this.isCalculated) {
+      this.expression = '';
+      this.isCalculated = false;
+    } else if (this.expression.length > 0) {
+      this.expression = this.expression.slice(0, -1);
+    }
+    this.updateUI();
+  },
+
+  clear() {
+    this.expression = '';
+    this.isCalculated = false;
+    this.updateUI();
+  },
+
+  addQuick(addVal) {
+    const currentTotal = this.evaluate();
+    const newTotal = (currentTotal || 0) + Number(addVal);
+    this.expression = String(newTotal);
+    this.isCalculated = true;
+    this.updateUI();
+  },
+
+  evaluate() {
+    if (!this.expression) return 0;
+    try {
+      const cleanExpr = this.expression.replace(/[^0-9+\-*/.]/g, '');
+      if (!cleanExpr) return 0;
+      const trimmed = cleanExpr.replace(/[+\-*/]+$/, '');
+      if (!trimmed) return 0;
+      return Math.max(0, Math.round(Function(`'use strict'; return (${trimmed})`)() || 0));
+    } catch {
+      return 0;
+    }
+  },
+
+  executeEquals() {
+    if (!this.expression) return;
+    const result = this.evaluate();
+    this.expression = String(result);
+    this.isCalculated = true;
+    this.updateUI();
+  },
+
+  getFinalAmount() {
+    const input = document.getElementById('txAmountInput');
+    if (input && input.value !== this.expression) {
+      this.expression = input.value;
+    }
+    return this.evaluate();
+  },
+
+  toggleKeypad() {
+    this.keypadVisible = !this.keypadVisible;
+    const keypadEl = document.getElementById('calcKeypad');
+    const toggleText = document.getElementById('calcToggleText');
+    if (keypadEl) {
+      keypadEl.classList.toggle('collapsed', !this.keypadVisible);
+    }
+    if (toggleText) {
+      toggleText.textContent = this.keypadVisible ? '電卓を閉じる' : '電卓を開く';
+    }
+  },
+
+  updateUI() {
+    const input = document.getElementById('txAmountInput');
+    const exprRow = document.getElementById('calcExprRow');
+    const previewEl = document.getElementById('calcPreviewVal');
+    if (!input) return;
+
+    input.value = this.expression;
+
+    const hasOp = /[+\-*/]/.test(this.expression);
+    if (hasOp && exprRow && previewEl) {
+      const displayExpr = this.expression
+        .replace(/\+/g, ' ＋ ')
+        .replace(/-/g, ' − ')
+        .replace(/\*/g, ' × ')
+        .replace(/\//g, ' ÷ ');
+      exprRow.textContent = displayExpr;
+      const previewRes = this.evaluate();
+      previewEl.textContent = `= ¥${formatCurrency(previewRes)}`;
+      previewEl.style.display = 'block';
+    } else {
+      if (exprRow) exprRow.textContent = '';
+      if (previewEl) previewEl.style.display = 'none';
+    }
+  }
+};
 
 function openAddTransactionModal(presetDate = null) {
   AppState.activeEditingId = null;
   document.getElementById('transactionModalTitle').textContent = '収支を記録';
   document.getElementById('txIdInput').value = '';
-  document.getElementById('txAmountInput').value = '';
   document.getElementById('txPaymentSelect').value = 'cash';
   document.getElementById('txNoteInput').value = '';
   document.getElementById('txIsFixedCheckbox').checked = false;
+
+  CalcEngine.init();
 
   const targetDate = typeof presetDate === 'string' && presetDate ? presetDate : (AppState.selectedDate || getTodayDateString());
   document.getElementById('txDateInput').value = targetDate;
@@ -1412,11 +1556,12 @@ function openEditTransactionModal(id) {
   AppState.activeEditingId = id;
   document.getElementById('transactionModalTitle').textContent = '記録を編集';
   document.getElementById('txIdInput').value = record.id;
-  document.getElementById('txAmountInput').value = record.amount;
   document.getElementById('txDateInput').value = record.date;
   document.getElementById('txPaymentSelect').value = record.payment || 'cash';
   document.getElementById('txNoteInput').value = record.note || '';
   document.getElementById('txIsFixedCheckbox').checked = !!record.isFixed;
+
+  CalcEngine.setVal(record.amount);
 
   setTransactionType(record.type);
   renderCategoryPicker(record.type, record.category);
@@ -1478,7 +1623,7 @@ function handleTransactionFormSubmit(e) {
 
   const id = document.getElementById('txIdInput').value;
   const type = document.querySelector('input[name="txType"]:checked').value;
-  const amount = Number(document.getElementById('txAmountInput').value);
+  const amount = CalcEngine.getFinalAmount();
   const category = document.getElementById('txCategoryInput').value;
   const date = document.getElementById('txDateInput').value;
   const payment = document.getElementById('txPaymentSelect').value;
@@ -1486,7 +1631,7 @@ function handleTransactionFormSubmit(e) {
   const isFixed = document.getElementById('txIsFixedCheckbox').checked;
 
   if (!amount || amount <= 0) {
-    showToast('有効な金額を入力してください', 'error');
+    showToast('有効な金額（1円以上）を入力してください', 'error');
     return;
   }
 
@@ -1917,16 +2062,63 @@ function setupEventListeners() {
   document.getElementById('typeExpenseRadio')?.addEventListener('change', () => setTransactionType('expense'));
   document.getElementById('typeIncomeRadio')?.addEventListener('change', () => setTransactionType('income'));
 
-  // 金額クイック加算
+  // 電卓トグル & 入力リスナー
+  document.getElementById('toggleCalcKeypadBtn')?.addEventListener('click', () => {
+    CalcEngine.toggleKeypad();
+  });
+
+  const txAmountInput = document.getElementById('txAmountInput');
+  txAmountInput?.addEventListener('input', (e) => {
+    CalcEngine.expression = e.target.value;
+    CalcEngine.isCalculated = false;
+    CalcEngine.updateUI();
+  });
+
+  // 電卓キーパッドボタン
+  document.querySelectorAll('.calc-btn-num[data-calc-num]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      CalcEngine.appendNum(btn.dataset.calcNum);
+    });
+  });
+
+  document.querySelectorAll('.calc-btn-op[data-calc-op]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      CalcEngine.appendOp(btn.dataset.calcOp);
+    });
+  });
+
+  document.querySelectorAll('.calc-btn-fn[data-calc-action="clear"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      CalcEngine.clear();
+    });
+  });
+
+  document.querySelectorAll('.calc-btn-fn[data-calc-action="backspace"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      CalcEngine.backspace();
+    });
+  });
+
+  document.querySelectorAll('.calc-btn-equal').forEach(btn => {
+    btn.addEventListener('click', () => {
+      CalcEngine.executeEquals();
+    });
+  });
+
+  document.querySelectorAll('.calc-btn-quick[data-add]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      CalcEngine.addQuick(Number(btn.dataset.add));
+    });
+  });
+
+  // 金額クイック加算チップ
   document.querySelectorAll('.quick-amounts-bar .btn-chip[data-add]').forEach(chip => {
     chip.addEventListener('click', () => {
-      const addVal = Number(chip.dataset.add);
-      const input = document.getElementById('txAmountInput');
-      input.value = (Number(input.value) || 0) + addVal;
+      CalcEngine.addQuick(Number(chip.dataset.add));
     });
   });
   document.getElementById('clearAmountChip')?.addEventListener('click', () => {
-    document.getElementById('txAmountInput').value = '';
+    CalcEngine.clear();
   });
 
   // スプレッドシート連携

@@ -20,7 +20,7 @@
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 
   <!-- App Styles (キャッシュバスター付き) -->
-  <link rel="stylesheet" href="style.css?v=20260815_nmd">
+  <link rel="stylesheet" href="style.css?v=20260815_calc">
 </head>
 <body data-theme="light">
 
@@ -539,13 +539,26 @@
           </label>
         </div>
 
-        <!-- Amount Input Field -->
+        <!-- Amount Input Field & Calculator -->
         <div class="form-group amount-group">
-          <label for="txAmountInput" class="form-label">金額 (円) <span class="required-star">*</span></label>
-          <div class="amount-input-box">
-            <span class="currency-prefix">¥</span>
-            <input type="number" id="txAmountInput" class="form-input-amount" placeholder="0" min="1" max="99999999" required autofocus>
+          <div class="amount-label-row">
+            <label for="txAmountInput" class="form-label">金額 (円) <span class="required-star">*</span></label>
+            <button type="button" class="btn-calc-toggle" id="toggleCalcKeypadBtn" title="電卓キーパッドの表示切替">
+              <i class="fa-solid fa-calculator"></i>
+              <span id="calcToggleText">電卓を閉じる</span>
+            </button>
           </div>
+
+          <!-- Calculator Display Box -->
+          <div class="calc-display-box" id="calcDisplayBox">
+            <div class="calc-expr-row" id="calcExprRow" style="min-height: 18px;"></div>
+            <div class="amount-input-box">
+              <span class="currency-prefix">¥</span>
+              <input type="text" inputmode="numeric" id="txAmountInput" class="form-input-amount" placeholder="0" required autofocus autocomplete="off">
+              <div class="calc-preview-val" id="calcPreviewVal" style="display: none;"></div>
+            </div>
+          </div>
+
           <!-- Quick Amount Buttons -->
           <div class="quick-amounts-bar">
             <button type="button" class="btn-chip" data-add="100">+100</button>
@@ -553,7 +566,39 @@
             <button type="button" class="btn-chip" data-add="1000">+1,000</button>
             <button type="button" class="btn-chip" data-add="5000">+5,000</button>
             <button type="button" class="btn-chip" data-add="10000">+1万</button>
-            <button type="button" class="btn-chip chip-clear" id="clearAmountChip">クリア</button>
+            <button type="button" class="btn-chip chip-clear" id="clearAmountChip">AC</button>
+          </div>
+
+          <!-- Built-in Calculator Keypad -->
+          <div class="calc-keypad" id="calcKeypad">
+            <div class="calc-keypad-grid">
+              <button type="button" class="calc-btn calc-btn-fn" data-calc-action="clear">AC</button>
+              <button type="button" class="calc-btn calc-btn-op" data-calc-op="/">÷</button>
+              <button type="button" class="calc-btn calc-btn-op" data-calc-op="*">×</button>
+              <button type="button" class="calc-btn calc-btn-fn" data-calc-action="backspace">
+                <i class="fa-solid fa-delete-left"></i>
+              </button>
+
+              <button type="button" class="calc-btn calc-btn-num" data-calc-num="7">7</button>
+              <button type="button" class="calc-btn calc-btn-num" data-calc-num="8">8</button>
+              <button type="button" class="calc-btn calc-btn-num" data-calc-num="9">9</button>
+              <button type="button" class="calc-btn calc-btn-op" data-calc-op="-">−</button>
+
+              <button type="button" class="calc-btn calc-btn-num" data-calc-num="4">4</button>
+              <button type="button" class="calc-btn calc-btn-num" data-calc-num="5">5</button>
+              <button type="button" class="calc-btn calc-btn-num" data-calc-num="6">6</button>
+              <button type="button" class="calc-btn calc-btn-op" data-calc-op="+">＋</button>
+
+              <button type="button" class="calc-btn calc-btn-num" data-calc-num="1">1</button>
+              <button type="button" class="calc-btn calc-btn-num" data-calc-num="2">2</button>
+              <button type="button" class="calc-btn calc-btn-num" data-calc-num="3">3</button>
+              <button type="button" class="calc-btn calc-btn-equal" data-calc-action="equals">＝</button>
+
+              <button type="button" class="calc-btn calc-btn-num" data-calc-num="0">0</button>
+              <button type="button" class="calc-btn calc-btn-num" data-calc-num="00">00</button>
+              <button type="button" class="calc-btn calc-btn-quick" data-add="1000">+1千</button>
+              <button type="button" class="calc-btn calc-btn-quick" data-add="10000">+1万</button>
+            </div>
           </div>
         </div>
 
