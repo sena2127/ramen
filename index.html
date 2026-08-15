@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="シンプルで高機能なモダン家計簿アプリ。日々の収支記録、カテゴリ別グラフ分析、月別予算管理、CSV入出力を手軽に行えます。">
-  <title>SmartKakeibo - スマート家計簿</title>
+  <meta name="description" content="シンプルで見やすい月間カレンダー付きモダン家計簿アプリ。日々の収支をカレンダー上で直感的に管理できます。">
+  <title>SmartKakeibo - カレンダー家計簿</title>
   
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -33,26 +33,22 @@
         </div>
         <div class="brand-text">
           <span class="brand-title">SmartKakeibo</span>
-          <span class="brand-subtitle">スマート家計簿</span>
+          <span class="brand-subtitle">カレンダー家計簿</span>
         </div>
       </div>
 
       <nav class="nav-menu">
-        <button class="nav-item active" data-tab="dashboard" id="nav-dashboard">
-          <i class="fa-solid fa-chart-pie"></i>
-          <span>ダッシュボード</span>
+        <button class="nav-item active" data-tab="calendar" id="nav-calendar">
+          <i class="fa-solid fa-calendar-days"></i>
+          <span>カレンダー</span>
         </button>
         <button class="nav-item" data-tab="records" id="nav-records">
           <i class="fa-solid fa-list-ul"></i>
           <span>収支明細</span>
         </button>
         <button class="nav-item" data-tab="analytics" id="nav-analytics">
-          <i class="fa-solid fa-chart-line"></i>
+          <i class="fa-solid fa-chart-pie"></i>
           <span>統計・グラフ</span>
-        </button>
-        <button class="nav-item" data-tab="budget" id="nav-budget">
-          <i class="fa-solid fa-bullseye"></i>
-          <span>予算管理</span>
         </button>
         <button class="nav-item" data-tab="settings" id="nav-settings">
           <i class="fa-solid fa-gear"></i>
@@ -62,7 +58,7 @@
 
       <div class="sidebar-footer">
         <div class="month-selector-widget">
-          <label for="globalMonthPicker" class="widget-label">対象年月</label>
+          <label for="globalMonthPicker" class="widget-label">表示月</label>
           <div class="month-nav-controls">
             <button class="btn-icon-subtle" id="prevMonthBtn" title="前月へ">
               <i class="fa-solid fa-chevron-left"></i>
@@ -72,6 +68,9 @@
               <i class="fa-solid fa-chevron-right"></i>
             </button>
           </div>
+          <button class="btn-today-shortcut" id="goToTodayBtn">
+            <i class="fa-solid fa-rotate-left"></i> 今月に戻る
+          </button>
         </div>
 
         <button class="btn-quick-report" id="openMonthlyReportBtn">
@@ -100,7 +99,6 @@
           </div>
           <div class="current-period-display">
             <h1 class="page-period-title" id="displayPeriodTitle">2026年 8月</h1>
-            <span class="period-badge" id="displayPeriodDays">集計期間中</span>
           </div>
         </div>
 
@@ -117,141 +115,113 @@
 
           <button class="btn-primary" id="openAddModalBtn">
             <i class="fa-solid fa-plus"></i>
-            <span>記録を追加</span>
+            <span>収支を記録</span>
           </button>
         </div>
       </header>
 
-      <!-- TAB 1: DASHBOARD -->
-      <section class="tab-pane active" id="pane-dashboard">
-        <!-- Summary Cards Grid -->
-        <div class="summary-cards-grid">
-          <!-- Income Card -->
-          <div class="summary-card income-card">
-            <div class="card-header">
-              <span class="card-label">今月の収入</span>
-              <div class="card-icon-bubble income-bubble">
-                <i class="fa-solid fa-arrow-down-left"></i>
-              </div>
-            </div>
-            <div class="card-body">
-              <div class="amount-wrap">
-                <span class="currency-symbol">¥</span>
-                <span class="amount-number" id="summaryIncomeAmount">0</span>
-              </div>
-              <div class="card-meta">
-                <span class="meta-badge" id="incomeCountBadge">0 件の収入</span>
-              </div>
+      <!-- Monthly Summary Banner (3 Cards) -->
+      <div class="summary-cards-grid">
+        <!-- Income Card -->
+        <div class="summary-card income-card">
+          <div class="card-header">
+            <span class="card-label">今月の収入</span>
+            <div class="card-icon-bubble income-bubble">
+              <i class="fa-solid fa-arrow-down-left"></i>
             </div>
           </div>
-
-          <!-- Expense Card -->
-          <div class="summary-card expense-card">
-            <div class="card-header">
-              <span class="card-label">今月の支出</span>
-              <div class="card-icon-bubble expense-bubble">
-                <i class="fa-solid fa-arrow-up-right"></i>
-              </div>
+          <div class="card-body">
+            <div class="amount-wrap">
+              <span class="currency-symbol">¥</span>
+              <span class="amount-number" id="summaryIncomeAmount">0</span>
             </div>
-            <div class="card-body">
-              <div class="amount-wrap">
-                <span class="currency-symbol">¥</span>
-                <span class="amount-number" id="summaryExpenseAmount">0</span>
-              </div>
-              <div class="card-meta">
-                <span class="meta-badge" id="expenseDailyAvg">1日平均: ¥0</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Balance Card -->
-          <div class="summary-card balance-card">
-            <div class="card-header">
-              <span class="card-label">今月の収支差額</span>
-              <div class="card-icon-bubble balance-bubble">
-                <i class="fa-solid fa-scale-balanced"></i>
-              </div>
-            </div>
-            <div class="card-body">
-              <div class="amount-wrap">
-                <span class="currency-symbol">¥</span>
-                <span class="amount-number" id="summaryBalanceAmount">0</span>
-              </div>
-              <div class="card-meta">
-                <span class="meta-badge status-positive" id="summarySavingRate">貯蓄率: 0%</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Budget Status Card -->
-          <div class="summary-card budget-card">
-            <div class="card-header">
-              <span class="card-label">今月の予算残高</span>
-              <div class="card-icon-bubble budget-bubble">
-                <i class="fa-solid fa-bullseye"></i>
-              </div>
-            </div>
-            <div class="card-body">
-              <div class="amount-wrap">
-                <span class="currency-symbol">¥</span>
-                <span class="amount-number" id="summaryBudgetRemaining">0</span>
-              </div>
-              <div class="budget-progress-container">
-                <div class="progress-bar-track">
-                  <div class="progress-bar-fill" id="summaryBudgetProgressBar" style="width: 0%;"></div>
-                </div>
-                <div class="progress-labels">
-                  <span id="budgetPercentLabel">使用率: 0%</span>
-                  <span id="budgetTotalLabel">予算: ¥0</span>
-                </div>
-              </div>
+            <div class="card-meta">
+              <span class="meta-badge" id="incomeCountBadge">0 件の収入</span>
             </div>
           </div>
         </div>
 
-        <!-- Dashboard Main Grid: Chart & Recent Transactions -->
-        <div class="dashboard-widgets-grid">
-          <!-- Chart Widget -->
-          <div class="dashboard-widget chart-widget">
-            <div class="widget-header">
-              <div class="widget-title-group">
-                <h2 class="widget-title">支出内訳カテゴリ</h2>
-                <span class="widget-subtitle" id="pieChartSubtitle">今月のカテゴリ別比率</span>
-              </div>
-              <div class="chart-legend-compact" id="chartLegendContainer"></div>
+        <!-- Expense Card -->
+        <div class="summary-card expense-card">
+          <div class="card-header">
+            <span class="card-label">今月の支出</span>
+            <div class="card-icon-bubble expense-bubble">
+              <i class="fa-solid fa-arrow-up-right"></i>
             </div>
-            <div class="widget-body chart-body-wrap">
-              <div class="canvas-container">
-                <canvas id="dashboardCategoryChart"></canvas>
-                <div class="chart-center-overlay" id="chartCenterInfo">
-                  <span class="center-label">総支出</span>
-                  <span class="center-amount" id="chartCenterTotal">¥0</span>
-                </div>
-              </div>
-              <!-- Top Category Ranking List -->
-              <div class="top-categories-list" id="topCategoriesList">
-                <!-- Dynamically injected -->
-              </div>
+          </div>
+          <div class="card-body">
+            <div class="amount-wrap">
+              <span class="currency-symbol">¥</span>
+              <span class="amount-number" id="summaryExpenseAmount">0</span>
+            </div>
+            <div class="card-meta">
+              <span class="meta-badge" id="expenseDailyAvg">1日平均: ¥0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Balance Card -->
+        <div class="summary-card balance-card">
+          <div class="card-header">
+            <span class="card-label">今月の収支差額</span>
+            <div class="card-icon-bubble balance-bubble">
+              <i class="fa-solid fa-scale-balanced"></i>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="amount-wrap">
+              <span class="currency-symbol">¥</span>
+              <span class="amount-number" id="summaryBalanceAmount">0</span>
+            </div>
+            <div class="card-meta">
+              <span class="meta-badge status-positive" id="summarySavingRate">貯蓄率: 0%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 1: CALENDAR VIEW (MAIN) -->
+      <section class="tab-pane active" id="pane-calendar">
+        <div class="calendar-view-layout">
+          <!-- Calendar Main Container -->
+          <div class="calendar-card">
+            <!-- Weekday Header -->
+            <div class="calendar-weekdays">
+              <div class="weekday-cell sun">日</div>
+              <div class="weekday-cell">月</div>
+              <div class="weekday-cell">火</div>
+              <div class="weekday-cell">水</div>
+              <div class="weekday-cell">木</div>
+              <div class="weekday-cell">金</div>
+              <div class="weekday-cell sat">土</div>
+            </div>
+
+            <!-- Calendar Days Grid -->
+            <div class="calendar-grid" id="calendarDaysGrid">
+              <!-- Dynamically rendered day cells -->
             </div>
           </div>
 
-          <!-- Recent Transactions Widget -->
-          <div class="dashboard-widget transactions-widget">
-            <div class="widget-header">
-              <div class="widget-title-group">
-                <h2 class="widget-title">最近の取引</h2>
-                <span class="widget-subtitle">直近の入力レコード</span>
+          <!-- Selected Day Detail Drawer / Panel -->
+          <div class="day-detail-panel" id="dayDetailPanel">
+            <div class="day-detail-header">
+              <div class="day-detail-title-group">
+                <h3 class="day-detail-date" id="selectedDateLabel">8月15日 (土)</h3>
+                <span class="day-detail-summary" id="selectedDateSummary">支出 ¥0 / 収入 ¥0</span>
               </div>
-              <button class="btn-link" id="viewAllRecordsBtn">すべて見る <i class="fa-solid fa-arrow-right"></i></button>
+              <button class="btn-secondary btn-sm" id="addTxForSelectedDateBtn">
+                <i class="fa-solid fa-plus"></i> この日に追加
+              </button>
             </div>
-            <div class="widget-body">
-              <div class="recent-list" id="recentTransactionsList">
-                <!-- Dynamically populated -->
+
+            <div class="day-detail-body">
+              <div class="day-tx-list" id="selectedDateTxList">
+                <!-- Dynamically injected transactions for selected date -->
               </div>
-              <div class="empty-state" id="recentEmptyState" style="display: none;">
-                <div class="empty-icon"><i class="fa-regular fa-clipboard"></i></div>
-                <p class="empty-title">まだ今月の記録がありません</p>
-                <p class="empty-desc">「記録を追加」ボタンから最初の収支を入力してみましょう。</p>
+              <div class="empty-state-compact" id="selectedDateEmptyState" style="display: none;">
+                <i class="fa-regular fa-calendar-check"></i>
+                <p>この日の収支記録はありません</p>
+                <button class="btn-link" id="addFirstTxForDayBtn">+ 記録を追加する</button>
               </div>
             </div>
           </div>
@@ -284,9 +254,9 @@
 
               <select id="recordPaymentFilter" class="filter-select">
                 <option value="all">すべての支払方法</option>
+                <option value="cash">現金</option>
                 <option value="credit">クレジットカード</option>
                 <option value="e-money">電子マネー / QR</option>
-                <option value="cash">現金</option>
                 <option value="bank">銀行引落・振込</option>
                 <option value="other">その他</option>
               </select>
@@ -326,34 +296,18 @@
       <!-- TAB 3: ANALYTICS & CHARTS -->
       <section class="tab-pane" id="pane-analytics">
         <div class="analytics-grid">
-          <!-- Monthly Trend Bar Chart -->
-          <div class="analytics-card full-width-card">
-            <div class="card-header-flex">
-              <div>
-                <h3 class="analytics-card-title">収支推移（過去6ヶ月間）</h3>
-                <span class="analytics-card-subtitle">月別の収入と支出のバランス比較</span>
-              </div>
-              <div class="chart-badge-legend">
-                <span class="legend-dot income-dot"></span> 収入
-                <span class="legend-dot expense-dot"></span> 支出
-              </div>
-            </div>
-            <div class="analytics-chart-wrap" style="height: 320px;">
-              <canvas id="monthlyTrendChart"></canvas>
-            </div>
-          </div>
-
-          <!-- Daily Spending Trend Line Chart -->
+          <!-- Category Breakdown Donut Chart -->
           <div class="analytics-card">
             <div class="card-header-flex">
               <div>
-                <h3 class="analytics-card-title">日別支出トレンド（今月）</h3>
-                <span class="analytics-card-subtitle">日ごとの支出額の波と推移</span>
+                <h3 class="analytics-card-title">カテゴリ別支出内訳</h3>
+                <span class="analytics-card-subtitle">今月のカテゴリ別シェア</span>
               </div>
             </div>
             <div class="analytics-chart-wrap" style="height: 280px;">
-              <canvas id="dailySpendingChart"></canvas>
+              <canvas id="categoryDonutChart"></canvas>
             </div>
+            <div class="top-categories-list" id="topCategoriesList" style="margin-top: 16px;"></div>
           </div>
 
           <!-- Payment Method Breakdown -->
@@ -368,69 +322,27 @@
               <canvas id="paymentMethodChart"></canvas>
             </div>
           </div>
-        </div>
-      </section>
 
-      <!-- TAB 4: BUDGET MANAGEMENT -->
-      <section class="tab-pane" id="pane-budget">
-        <div class="budget-management-wrapper">
-          <!-- Total Budget Overview Banner -->
-          <div class="budget-hero-card">
-            <div class="budget-hero-main">
-              <div class="hero-header">
-                <span class="hero-label">今月の総予算設定</span>
-                <button class="btn-secondary btn-sm" id="openTotalBudgetModalBtn">
-                  <i class="fa-solid fa-pen-to-square"></i> 総予算を変更
-                </button>
-              </div>
-              <div class="hero-amounts">
-                <div class="hero-amount-col">
-                  <span class="hero-sublabel">設定総予算</span>
-                  <span class="hero-val" id="budgetHeroTotal">¥200,000</span>
-                </div>
-                <div class="hero-divider">/</div>
-                <div class="hero-amount-col">
-                  <span class="hero-sublabel">現在の使用額</span>
-                  <span class="hero-val text-expense" id="budgetHeroUsed">¥0</span>
-                </div>
-                <div class="hero-divider">=</div>
-                <div class="hero-amount-col">
-                  <span class="hero-sublabel">今月の残り予算</span>
-                  <span class="hero-val text-positive" id="budgetHeroLeft">¥200,000</span>
-                </div>
-              </div>
-              <div class="budget-big-progress">
-                <div class="big-progress-bar">
-                  <div class="big-progress-fill" id="budgetHeroProgressFill" style="width: 0%;"></div>
-                </div>
-                <div class="big-progress-meta">
-                  <span id="budgetHeroPercent">0% 消化</span>
-                  <span id="budgetHeroDaysLeft">集計期間中</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Category Budgets Grid -->
-          <div class="category-budgets-section">
-            <div class="section-title-bar">
+          <!-- Monthly Trend Bar Chart -->
+          <div class="analytics-card full-width-card">
+            <div class="card-header-flex">
               <div>
-                <h3 class="section-title">カテゴリ別予算と進捗</h3>
-                <span class="section-subtitle">カテゴリごとの予算を設定して使いすぎを防止</span>
+                <h3 class="analytics-card-title">収支推移（過去6ヶ月間）</h3>
+                <span class="analytics-card-subtitle">月別の収入と支出の推移比較</span>
               </div>
-              <button class="btn-secondary btn-sm" id="openCategoryBudgetSetupBtn">
-                <i class="fa-solid fa-sliders"></i> カテゴリ予算を個別設定
-              </button>
+              <div class="chart-badge-legend">
+                <span class="legend-dot income-dot"></span> 収入
+                <span class="legend-dot expense-dot"></span> 支出
+              </div>
             </div>
-
-            <div class="category-budget-cards-grid" id="categoryBudgetsGrid">
-              <!-- Dynamically populated -->
+            <div class="analytics-chart-wrap" style="height: 300px;">
+              <canvas id="monthlyTrendChart"></canvas>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- TAB 5: SETTINGS & DATA MANAGEMENT -->
+      <!-- TAB 4: SETTINGS & DATA MANAGEMENT -->
       <section class="tab-pane" id="pane-settings">
         <div class="settings-container">
           <!-- Data Management Box -->
@@ -458,7 +370,7 @@
                   <i class="fa-solid fa-cloud-arrow-down"></i>
                   <div class="tile-text">
                     <span class="tile-title">完全バックアップ (JSON)</span>
-                    <span class="tile-desc">予算・設定を含む完全データ</span>
+                    <span class="tile-desc">全履歴を含むバックアップファイル</span>
                   </div>
                 </button>
 
@@ -508,7 +420,7 @@
               </div>
               <div>
                 <h3 class="settings-title">データのリセット</h3>
-                <p class="settings-desc">保存されている全ての家計簿データ（収支記録・予算）を削除します。</p>
+                <p class="settings-desc">保存されている全ての家計簿データ（収支記録）を消去します。</p>
               </div>
             </div>
             <div class="settings-card-body">
@@ -524,9 +436,9 @@
 
     <!-- Mobile Bottom Navigation Bar -->
     <nav class="mobile-bottom-nav">
-      <button class="bottom-nav-item active" data-tab="dashboard">
-        <i class="fa-solid fa-chart-pie"></i>
-        <span>ホーム</span>
+      <button class="bottom-nav-item active" data-tab="calendar">
+        <i class="fa-solid fa-calendar-days"></i>
+        <span>カレンダー</span>
       </button>
       <button class="bottom-nav-item" data-tab="records">
         <i class="fa-solid fa-list-ul"></i>
@@ -536,12 +448,12 @@
         <i class="fa-solid fa-plus"></i>
       </button>
       <button class="bottom-nav-item" data-tab="analytics">
-        <i class="fa-solid fa-chart-line"></i>
+        <i class="fa-solid fa-chart-pie"></i>
         <span>グラフ</span>
       </button>
-      <button class="bottom-nav-item" data-tab="budget">
-        <i class="fa-solid fa-bullseye"></i>
-        <span>予算</span>
+      <button class="bottom-nav-item" data-tab="settings">
+        <i class="fa-solid fa-gear"></i>
+        <span>設定</span>
       </button>
     </nav>
   </div>
@@ -636,54 +548,6 @@
           <button type="submit" class="btn-primary" id="saveTransactionBtn">
             <i class="fa-solid fa-check"></i> 保存する
           </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- MODAL: TOTAL BUDGET EDIT -->
-  <div class="modal-backdrop" id="totalBudgetModal" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-sm">
-      <div class="modal-header">
-        <h3 class="modal-title">月間総予算の設定</h3>
-        <button class="btn-modal-close" id="closeTotalBudgetModalBtn" aria-label="閉じる">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-      <form id="totalBudgetForm" class="modal-body">
-        <div class="form-group">
-          <label for="totalBudgetInput" class="form-label">今月（<span id="budgetModalMonthName">8月</span>）の支出目標総額 (円)</label>
-          <div class="amount-input-box">
-            <span class="currency-prefix">¥</span>
-            <input type="number" id="totalBudgetInput" class="form-input-amount" min="0" step="1000" placeholder="200000" required>
-          </div>
-          <p class="form-hint">今月の支出上限を設定すると、残り予算や消化率が自動計算されます。</p>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-secondary" id="cancelTotalBudgetModalBtn">キャンセル</button>
-          <button type="submit" class="btn-primary">保存する</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- MODAL: CATEGORY BUDGETS EDIT -->
-  <div class="modal-backdrop" id="categoryBudgetModal" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3 class="modal-title">カテゴリ別予算の設定</h3>
-        <button class="btn-modal-close" id="closeCategoryBudgetModalBtn" aria-label="閉じる">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-      <form id="categoryBudgetForm" class="modal-body">
-        <p class="modal-description">各カテゴリの月間支出上限額を設定できます（未設定は0円でOK）。</p>
-        <div class="category-budget-inputs-list" id="categoryBudgetInputsList">
-          <!-- Dynamically populated input rows -->
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-secondary" id="cancelCategoryBudgetModalBtn">キャンセル</button>
-          <button type="submit" class="btn-primary">予算設定を保存</button>
         </div>
       </form>
     </div>
