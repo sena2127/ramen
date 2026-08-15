@@ -692,7 +692,7 @@ body[data-theme="dark"] .dark-icon { display: none; }
 
 .calendar-weekdays {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, 1fr) 115px;
   text-align: center;
   font-weight: 800;
   font-size: 0.825rem;
@@ -700,15 +700,96 @@ body[data-theme="dark"] .dark-icon { display: none; }
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border-subtle);
   margin-bottom: 10px;
+  gap: 8px;
 }
 
 .weekday-cell.sun { color: var(--color-sun); }
 .weekday-cell.sat { color: var(--color-sat); }
+.weekday-cell.week-total {
+  color: var(--primary-600);
+  background: var(--primary-50);
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+}
+body[data-theme="dark"] .weekday-cell.week-total {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
 
 .calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, 1fr) 115px;
   gap: 8px;
+}
+
+/* Weekly Total Cell */
+.cal-week-total-cell {
+  background: var(--bg-surface-subtle);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  min-height: 96px;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: right;
+  transition: all var(--transition-fast);
+}
+
+.cal-week-total-cell:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--primary-500);
+}
+
+.cal-week-total-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cal-week-badge {
+  font-size: 0.675rem;
+  font-weight: 800;
+  color: var(--primary-700);
+  background: var(--primary-100);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+body[data-theme="dark"] .cal-week-badge {
+  background: rgba(16, 185, 129, 0.25);
+  color: #34d399;
+}
+
+.cal-week-amounts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.cal-week-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.cal-week-val {
+  font-size: 0.725rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-week-exp { color: var(--expense-main); }
+.cal-week-inc { color: var(--income-main); }
+.cal-week-net {
+  font-size: 0.7rem;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 2px;
+  margin-top: 2px;
 }
 
 /* Individual Calendar Day Cell */
@@ -1787,4 +1868,29 @@ body[data-theme="dark"] .cal-day-cell.selected {
   }
   .cal-day-num { font-size: 0.75rem; width: 20px; height: 20px; }
   .cal-amt-row { font-size: 0.625rem; }
+
+  .calendar-weekdays {
+    grid-template-columns: repeat(7, 1fr) 54px;
+    gap: 3px;
+    font-size: 0.7rem;
+    padding-bottom: 8px;
+  }
+  .calendar-grid {
+    grid-template-columns: repeat(7, 1fr) 54px;
+    gap: 3px;
+  }
+  .cal-week-total-cell {
+    min-height: 64px;
+    padding: 4px 2px;
+  }
+  .cal-week-badge {
+    font-size: 0.55rem;
+    padding: 1px 3px;
+  }
+  .cal-week-val {
+    font-size: 0.575rem;
+  }
+  .cal-week-label {
+    display: none;
+  }
 }

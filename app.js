@@ -360,7 +360,7 @@ function renderSummaryCards() {
 }
 
 // ==========================================
-// 7. カレンダー描画エンジン (Core)
+// 7. カレンダー描画エンジン (Core - 週計対応)
 // ==========================================
 
 function renderCalendar() {
@@ -380,6 +380,8 @@ function renderCalendar() {
   // 前月の日数
   const prevMonthTotalDays = new Date(year, month - 1, 0).getDate();
 
+  const allDayItems = [];
+
   // 1. 前月の余白セル
   for (let i = firstDayOfWeek - 1; i >= 0; i--) {
     const dayNum = prevMonthTotalDays - i;
@@ -389,14 +391,14 @@ function renderCalendar() {
     const dateStr = `${prevY}-${String(prevM).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
     const dayOfWeek = (firstDayOfWeek - 1 - i + 7) % 7;
 
-    const cell = createCalendarCell({
+    allDayItems.push({
       dayNum,
       dateStr,
       dayOfWeek,
       isOtherMonth: true,
-      summary
+      isToday: false,
+      isSelected: dateStr === AppState.selectedDate
     });
-    grid.appendChild(cell);
   }
 
   // 2. 当月の日付セル
@@ -406,20 +408,18 @@ function renderCalendar() {
     const isToday = dateStr === todayStr;
     const isSelected = dateStr === AppState.selectedDate;
 
-    const cell = createCalendarCell({
+    allDayItems.push({
       dayNum: d,
       dateStr,
       dayOfWeek,
       isToday,
       isSelected,
-      isOtherMonth: false,
-      summary
+      isOtherMonth: false
     });
-    grid.appendChild(cell);
   }
 
-  // 3. 翌月の余白セル (合計マス数が7の倍数になるよう調整)
-  const currentTotalCells = firstDayOfWeek + totalDaysInMonth;
+  // 3. 翌月の余白セル
+  const currentTotalCells = allDayItems.length;
   const nextMonthCells = (7 - (currentTotalCells % 7)) % 7;
 
   for (let d = 1; d <= nextMonthCells; d++) {
@@ -429,14 +429,47 @@ function renderCalendar() {
     const dateStr = `${nextY}-${String(nextM).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dayOfWeek = (currentTotalCells + d - 1) % 7;
 
-    const cell = createCalendarCell({
+    allDayItems.push({
       dayNum: d,
       dateStr,
       dayOfWeek,
       isOtherMonth: true,
-      summary
+      isToday: false,
+      isSelected: dateStr === AppState.selectedDate
     });
-    grid.appendChild(cell);
+  }
+
+  // 4. 7日（1行）ごとに日セル＋「週計セル」を生成してグリッドに配置
+  const totalWeeks = allDayItems.length / 7;
+
+  for (let w = 0; w < totalWeeks; w++) {
+    const weekDays = allDayItems.slice(w * 7, (w + 1) * 7);
+    let weekExpense = 0;
+    let weekIncome = 0;
+    const weekDates = weekDays.map(item => item.dateStr);
+
+    // 7つの日セルを追加
+    weekDays.forEach(item => {
+      const cell = createCalendarCell({
+        ...item,
+        summary
+      });
+      grid.appendChild(cell);
+
+      // 週の合計を合算
+      const dayData = summary.dailyData[item.dateStr] || { expense: 0, income: 0 };
+      weekExpense += dayData.expense;
+      weekIncome += dayData.income;
+    });
+
+    // 8番目の「週計セル（行ごとの収支）」を追加
+    const weekTotalCell = createWeekTotalCell({
+      weekIndex: w + 1,
+      weekExpense,
+      weekIncome,
+      weekDates
+    });
+    grid.appendChild(weekTotalCell);
   }
 }
 
@@ -475,6 +508,71 @@ function createCalendarCell({ dayNum, dateStr, dayOfWeek, isToday, isSelected, i
   });
 
   return cell;
+}
+
+function createWeekTotalCell({ weekIndex, weekExpense, weekIncome, weekDates }) {
+  const cell = document.createElement('div');
+  cell.className = 'cal-week-total-cell';
+
+  const balance = weekIncome - weekExpense;
+  const isNetPositive = balance >= 0;
+
+  let incHtml = '';
+  if (weekIncome > 0) {
+    incHtml = `
+      <div class="cal-week-val cal-week-inc">+¥${formatCurrency(weekIncome)}</div>
+    `;
+  }
+
+  cell.innerHTML = `
+    <div class="cal-week-total-header">
+      <span class="cal-week-badge">第${weekIndex}週</span>
+    </div>
+    <div class="cal-week-amounts">
+      <span class="cal-week-label">週支出</span>
+      <div class="cal-week-val cal-week-exp">-¥${formatCurrency(weekExpense)}</div>
+      ${incHtml}
+      <div class="cal-week-net" style="color: ${isNetPositive ? 'var(--income-main)' : 'var(--expense-main)'};">
+        ${isNetPositive ? '+' : ''}¥${formatCurrency(balance)}
+      </div>
+    </div>
+  `;
+
+  // 週計セルをクリックすると、その週の7日間の明細一覧を右側パネルに表示
+  cell.addEventListener('click', () => {
+    selectWeekTotal(weekIndex, weekDates, weekExpense, weekIncome);
+  });
+
+  return cell;
+}
+
+function selectWeekTotal(weekIndex, weekDates, weekExpense, weekIncome) {
+  // カレンダーマスの選択解除
+  document.querySelectorAll('.cal-day-cell').forEach(c => c.classList.remove('selected'));
+
+  const label = document.getElementById('selectedDateLabel');
+  const summaryEl = document.getElementById('selectedDateSummary');
+  const list = document.getElementById('selectedDateTxList');
+  const empty = document.getElementById('selectedDateEmptyState');
+  if (!label || !list || !empty) return;
+
+  label.textContent = `第${weekIndex}週のまとめ`;
+  summaryEl.innerHTML = `週支出 <strong style="color:var(--expense-main);">¥${formatCurrency(weekExpense)}</strong> / 週収入 <strong style="color:var(--income-main);">¥${formatCurrency(weekIncome)}</strong>`;
+
+  const weekRecords = AppState.records.filter(r => weekDates.includes(r.date));
+
+  list.innerHTML = '';
+  if (weekRecords.length === 0) {
+    list.style.display = 'none';
+    empty.style.display = 'flex';
+  } else {
+    list.style.display = 'flex';
+    empty.style.display = 'none';
+    weekRecords.sort((a, b) => new Date(a.date) - new Date(b.date));
+    weekRecords.forEach(r => {
+      list.appendChild(createTransactionElement(r));
+    });
+  }
 }
 
 function selectCalendarDate(dateStr) {
