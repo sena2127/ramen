@@ -130,9 +130,9 @@ const INCOME_CATEGORIES = [
 
 // 支払方法マスター
 const PAYMENT_METHODS = {
+  'cash': { name: '現金', icon: 'fa-money-bill-wave' },
   'credit': { name: 'クレジットカード', icon: 'fa-credit-card' },
   'e-money': { name: '電子マネー/QR', icon: 'fa-mobile-screen-button' },
-  'cash': { name: '現金', icon: 'fa-money-bill-wave' },
   'bank': { name: '銀行引落/振込', icon: 'fa-building-columns' },
   'other': { name: 'その他', icon: 'fa-tag' }
 };
@@ -1118,6 +1118,7 @@ function openAddTransactionModal(presetDate = null) {
   document.getElementById('transactionModalTitle').textContent = '収支を記録';
   document.getElementById('txIdInput').value = '';
   document.getElementById('txAmountInput').value = '';
+  document.getElementById('txPaymentSelect').value = 'cash';
   document.getElementById('txNoteInput').value = '';
   document.getElementById('txIsFixedCheckbox').checked = false;
 
@@ -1140,7 +1141,7 @@ function openEditTransactionModal(id) {
   document.getElementById('txIdInput').value = record.id;
   document.getElementById('txAmountInput').value = record.amount;
   document.getElementById('txDateInput').value = record.date;
-  document.getElementById('txPaymentSelect').value = record.payment || 'credit';
+  document.getElementById('txPaymentSelect').value = record.payment || 'cash';
   document.getElementById('txNoteInput').value = record.note || '';
   document.getElementById('txIsFixedCheckbox').checked = !!record.isFixed;
 
