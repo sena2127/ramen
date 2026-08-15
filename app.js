@@ -11,42 +11,106 @@ const STORAGE_KEY_THEME = 'smartkakeibo_theme_v3';
 const STORAGE_KEY_SHEETS_URL = 'smartkakeibo_sheets_url_v1';
 
 // Google Apps Script 用のコードテンプレート（ユーザーがスプレッドシートに貼るコード）
-const GAS_SCRIPT_CODE = `function doPost(e) {
+const GAS_SCRIPT_CODE = `// ==============================================================================
+// SmartKakeibo - Google スプレッドシート連携用スクリプト
+// ==============================================================================
+
+var SHEET_NAME = '家計簿データ';
+var HEADERS = ['ID', '日付', '収支区分', 'カテゴリ', '金額', '支払方法', 'メモ', '固定費', '登録日時'];
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('📊 家計簿アプリ連携')
+    .addItem('🛠️ シートの初期セットアップ', 'setup')
+    .addItem('📈 データ件数・集計チェック', 'checkDataSummary')
+    .addToUi();
+}
+
+function setup() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    if (ss.getSheets().length === 1 && ss.getActiveSheet().getLastRow() === 0) {
+      sheet = ss.getActiveSheet();
+      sheet.setName(SHEET_NAME);
+    } else {
+      sheet = ss.insertSheet(SHEET_NAME, 0);
+    }
+  }
+  sheet.setFrozenRows(1);
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(HEADERS);
+  } else {
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+  }
+  var headerRange = sheet.getRange(1, 1, 1, HEADERS.length);
+  headerRange.setBackground('#0f9d58').setFontColor('#ffffff').setFontWeight('bold').setHorizontalAlignment('center');
+  sheet.setRowHeight(1, 35);
+  sheet.getRange('A:A').setNumberFormat('@');
+  sheet.getRange('B2:B').setNumberFormat('yyyy-MM-dd').setHorizontalAlignment('center');
+  sheet.getRange('C2:C').setHorizontalAlignment('center');
+  sheet.getRange('E2:E').setNumberFormat('#,##0').setHorizontalAlignment('right');
+  sheet.getRange('H2:H').setHorizontalAlignment('center');
+  sheet.getRange('I2:I').setNumberFormat('yyyy-MM-dd HH:mm:ss');
+  sheet.setColumnWidth(1, 180);
+  sheet.setColumnWidth(2, 110);
+  sheet.setColumnWidth(4, 130);
+  sheet.setColumnWidth(5, 110);
+  sheet.setColumnWidth(6, 130);
+  sheet.setColumnWidth(7, 240);
+  return 'セットアップが完了しました！';
+}
+
+function doPost(e) {
   try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return createJsonResponse({ status: 'error', message: 'No payload' });
+    }
     var data = JSON.parse(e.postData.contents);
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    
-    // ヘッダー行がなければ自動生成
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow(["ID", "日付", "収支区分", "カテゴリ", "金額", "支払方法", "メモ", "固定費", "登録日時"]);
-      sheet.getRange(1, 1, 1, 9).setBackground("#0f9d58").setFontColor("#ffffff").setFontWeight("bold");
-    }
+    var sheet = getTargetSheet();
+    var action = data.action;
 
-    if (data.action === "add") {
+    if (action === 'add') {
       var r = data.record;
-      sheet.appendRow([r.id, r.date, r.type === "expense" ? "支出" : "収入", r.categoryName || r.category, r.amount, r.paymentName || r.payment, r.note || "", r.isFixed ? "固定費" : "", r.createdAt]);
-      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+      sheet.appendRow([
+        String(r.id), r.date, r.type === 'expense' ? '支出' : '収入',
+        r.categoryName || r.category || '', Number(r.amount) || 0,
+        r.paymentName || r.payment || '', r.note || '',
+        r.isFixed ? '固定費' : '', r.createdAt || new Date().toISOString()
+      ]);
+      return createJsonResponse({ status: 'success', action: 'add', id: r.id });
     }
 
-    if (data.action === "edit") {
+    if (action === 'edit') {
       var rows = sheet.getDataRange().getValues();
       var r = data.record;
+      var found = false;
       for (var i = 1; i < rows.length; i++) {
         if (String(rows[i][0]) === String(r.id)) {
-          sheet.getRange(i + 1, 2).setValue(r.date);
-          sheet.getRange(i + 1, 3).setValue(r.type === "expense" ? "支出" : "収入");
-          sheet.getRange(i + 1, 4).setValue(r.categoryName || r.category);
-          sheet.getRange(i + 1, 5).setValue(r.amount);
-          sheet.getRange(i + 1, 6).setValue(r.paymentName || r.payment);
-          sheet.getRange(i + 1, 7).setValue(r.note || "");
-          sheet.getRange(i + 1, 8).setValue(r.isFixed ? "固定費" : "");
+          var rowIdx = i + 1;
+          sheet.getRange(rowIdx, 2).setValue(r.date);
+          sheet.getRange(rowIdx, 3).setValue(r.type === 'expense' ? '支出' : '収入');
+          sheet.getRange(rowIdx, 4).setValue(r.categoryName || r.category || '');
+          sheet.getRange(rowIdx, 5).setValue(Number(r.amount) || 0);
+          sheet.getRange(rowIdx, 6).setValue(r.paymentName || r.payment || '');
+          sheet.getRange(rowIdx, 7).setValue(r.note || '');
+          sheet.getRange(rowIdx, 8).setValue(r.isFixed ? '固定費' : '');
+          found = true;
           break;
         }
       }
-      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+      if (!found) {
+        sheet.appendRow([
+          String(r.id), r.date, r.type === 'expense' ? '支出' : '収入',
+          r.categoryName || r.category || '', Number(r.amount) || 0,
+          r.paymentName || r.payment || '', r.note || '',
+          r.isFixed ? '固定費' : '', r.createdAt || new Date().toISOString()
+        ]);
+      }
+      return createJsonResponse({ status: 'success', action: 'edit', id: r.id });
     }
 
-    if (data.action === "delete") {
+    if (action === 'delete') {
       var rows = sheet.getDataRange().getValues();
       for (var i = 1; i < rows.length; i++) {
         if (String(rows[i][0]) === String(data.id)) {
@@ -54,53 +118,94 @@ const GAS_SCRIPT_CODE = `function doPost(e) {
           break;
         }
       }
-      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+      return createJsonResponse({ status: 'success', action: 'delete', id: data.id });
     }
 
-    if (data.action === "syncAll") {
+    if (action === 'syncAll') {
       var lastRow = sheet.getLastRow();
-      if (lastRow > 1) {
-        sheet.deleteRows(2, lastRow - 1);
-      }
-      if (data.records && data.records.length > 0) {
-        data.records.forEach(function(r) {
-          sheet.appendRow([r.id, r.date, r.type === "expense" ? "支出" : "収入", r.categoryName || r.category, r.amount, r.paymentName || r.payment, r.note || "", r.isFixed ? "固定費" : "", r.createdAt]);
+      if (lastRow > 1) sheet.deleteRows(2, lastRow - 1);
+      var records = data.records || [];
+      if (records.length > 0) {
+        var rowsToAdd = records.map(function(r) {
+          return [
+            String(r.id), r.date, r.type === 'expense' ? '支出' : '収入',
+            r.categoryName || r.category || '', Number(r.amount) || 0,
+            r.paymentName || r.payment || '', r.note || '',
+            r.isFixed ? '固定費' : '', r.createdAt || new Date().toISOString()
+          ];
         });
+        sheet.getRange(2, 1, rowsToAdd.length, HEADERS.length).setValues(rowsToAdd);
       }
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", count: data.records ? data.records.length : 0 })).setMimeType(ContentService.MimeType.JSON);
+      return createJsonResponse({ status: 'success', action: 'syncAll', count: records.length });
     }
 
+    if (action === 'ping' || action === 'test') {
+      return createJsonResponse({ status: 'success', message: 'SmartKakeibo GAS connected!' });
+    }
+
+    return createJsonResponse({ status: 'error', message: 'Unknown action: ' + action });
   } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    return createJsonResponse({ status: 'error', message: err.toString() });
   }
 }
 
 function doGet(e) {
   try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var sheet = getTargetSheet();
     var rows = sheet.getDataRange().getValues();
     var records = [];
     if (rows.length > 1) {
       for (var i = 1; i < rows.length; i++) {
         var row = rows[i];
-        if (!row[0]) continue;
+        if (!row[0] && !row[1]) continue;
+        var dateVal = row[1];
+        var dateStr = (dateVal instanceof Date)
+          ? Utilities.formatDate(dateVal, Session.getScriptTimeZone() || 'Asia/Tokyo', 'yyyy-MM-dd')
+          : String(dateVal).substring(0, 10);
         records.push({
-          id: String(row[0]),
-          date: String(row[1]).substring(0, 10),
-          type: row[2] === "支出" ? "expense" : "income",
-          category: String(row[3]),
+          id: String(row[0] || ('tx_' + i)),
+          date: dateStr,
+          type: row[2] === '支出' ? 'expense' : 'income',
+          category: String(row[3] || 'other_exp'),
           amount: Number(row[4]) || 0,
-          payment: String(row[5]),
-          note: String(row[6] || ""),
-          isFixed: row[7] === "固定費",
-          createdAt: row[8] ? String(row[8]) : ""
+          payment: String(row[5] || 'cash'),
+          note: String(row[6] || ''),
+          isFixed: row[7] === '固定費',
+          createdAt: row[8] ? String(row[8]) : ''
         });
       }
     }
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", records: records })).setMimeType(ContentService.MimeType.JSON);
+    return createJsonResponse({ status: 'success', totalCount: records.length, records: records });
   } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+    return createJsonResponse({ status: 'error', message: err.toString() });
   }
+}
+
+function getTargetSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    setup();
+    sheet = ss.getSheetByName(SHEET_NAME) || ss.getActiveSheet();
+  }
+  return sheet;
+}
+
+function createJsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function checkDataSummary() {
+  var sheet = getTargetSheet();
+  var rows = sheet.getDataRange().getValues();
+  var expCount = 0, incCount = 0, expSum = 0, incSum = 0;
+  for (var i = 1; i < rows.length; i++) {
+    var type = rows[i][2];
+    var amount = Number(rows[i][4]) || 0;
+    if (type === '支出') { expCount++; expSum += amount; }
+    else if (type === '収入') { incCount++; incSum += amount; }
+  }
+  SpreadsheetApp.getUi().alert('📊 集計結果', '行数: ' + (rows.length - 1) + '件\\n支出: ' + expCount + '件 (¥' + expSum.toLocaleString() + ')\\n収入: ' + incCount + '件 (¥' + incSum.toLocaleString() + ')\\n差額: ¥' + (incSum - expSum).toLocaleString(), SpreadsheetApp.getUi().ButtonSet.OK);
 }`;
 
 // 支出カテゴリマスター
