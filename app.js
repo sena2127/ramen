@@ -9,6 +9,7 @@
 const STORAGE_KEY_RECORDS = 'smartkakeibo_records_v4_clean';
 const STORAGE_KEY_THEME = 'smartkakeibo_theme_v3';
 const STORAGE_KEY_SHEETS_URL = 'smartkakeibo_sheets_url_v1';
+const STORAGE_KEY_NMD = 'smartkakeibo_nmd_days_v1';
 
 // Google Apps Script 用のコードテンプレート（ユーザーがスプレッドシートに貼るコード）
 const GAS_SCRIPT_CODE = `// ==============================================================================
@@ -251,6 +252,7 @@ const AppState = {
   selectedDate: getTodayDateString(),  // "YYYY-MM-DD"
   currentTab: 'calendar',
   records: [],                         // 空の状態でスタート（サンプルデータなし）
+  nmdDays: [],                         // ノーマネーデー（やったね！達成日: ["YYYY-MM-DD", ...]）
   sheetsUrl: '',                       // Google Apps Script Webhook URL
   activeEditingId: null,
   charts: {
@@ -337,6 +339,18 @@ function loadStateFromStorage() {
       saveRecordsToStorage();
     }
 
+    // ノーマネーデー (NMD) 達成日一覧ロード
+    const rawNmd = localStorage.getItem(STORAGE_KEY_NMD);
+    if (rawNmd) {
+      try {
+        AppState.nmdDays = JSON.parse(rawNmd) || [];
+      } catch {
+        AppState.nmdDays = [];
+      }
+    } else {
+      AppState.nmdDays = [];
+    }
+
     // スプレッドシート連携URLロード
     const savedUrl = localStorage.getItem(STORAGE_KEY_SHEETS_URL);
     if (savedUrl) {
@@ -345,11 +359,92 @@ function loadStateFromStorage() {
   } catch (e) {
     console.error('Storage error:', e);
     AppState.records = [];
+    AppState.nmdDays = [];
   }
 }
 
 function saveRecordsToStorage() {
   localStorage.setItem(STORAGE_KEY_RECORDS, JSON.stringify(AppState.records));
+}
+
+function saveNmdDaysToStorage() {
+  localStorage.setItem(STORAGE_KEY_NMD, JSON.stringify(AppState.nmdDays));
+}
+
+/**
+ * やったね！達成時のファンファーレ効果音 (Web Audio API)
+ */
+function playCelebrationSound() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    
+    // 明るいファンファーレ音階 (C5, E5, G5, C6)
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+    const startTime = ctx.currentTime;
+    
+    notes.forEach((freq, index) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, startTime + index * 0.09);
+      
+      gain.gain.setValueAtTime(0.22, startTime + index * 0.09);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + index * 0.09 + (index === 3 ? 0.45 : 0.22));
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start(startTime + index * 0.09);
+      osc.stop(startTime + index * 0.09 + (index === 3 ? 0.5 : 0.25));
+    });
+  } catch (e) {
+    // 音声再生がブロックされた場合は静かに無視
+  }
+}
+
+/**
+ * ノーマネーデー（やったね！）の切り替え登録・解除
+ */
+function toggleNoMoneyDay(dateStr = AppState.selectedDate) {
+  const index = AppState.nmdDays.indexOf(dateStr);
+  const [y, m, d] = dateStr.split('-');
+  const formattedDate = `${Number(m)}月${Number(d)}日`;
+
+  if (index >= 0) {
+    // 解除
+    AppState.nmdDays.splice(index, 1);
+    saveNmdDaysToStorage();
+    showToast(`${formattedDate} のノーマネーデー記録を解除しました`, 'info');
+  } else {
+    // 達成！
+    // 支出があるか確認
+    const hasExpense = AppState.records.some(r => r.date === dateStr && r.type === 'expense' && Number(r.amount) > 0);
+    if (hasExpense) {
+      showToast('支出が記録されている日はノーマネーデーに登録できません', 'error');
+      return;
+    }
+
+    AppState.nmdDays.push(dateStr);
+    saveNmdDaysToStorage();
+    
+    // 演出：紙吹雪 & サウンド & トースト
+    if (typeof confetti === 'function') {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+    }
+    playCelebrationSound();
+    showToast(`🎉 やったね！${formattedDate} をノーマネーデーに記録しました！👏`, 'success');
+  }
+
+  renderCalendar();
+  renderSelectedDayDetails();
+  renderSummaryCards();
 }
 
 // ==========================================
@@ -594,6 +689,13 @@ function renderSummaryCards() {
   const savingRateEl = document.getElementById('summarySavingRate');
   savingRateEl.textContent = `貯蓄率: ${summary.savingRate}%`;
   savingRateEl.className = summary.balance >= 0 ? 'meta-badge status-positive' : 'meta-badge status-negative';
+
+  // ノーマネーデー (NMD) 達成日数の計算＆表示
+  const nmdThisMonth = AppState.nmdDays.filter(d => d.startsWith(AppState.currentMonth)).length;
+  const nmdBadge = document.getElementById('summaryNmdBadge');
+  if (nmdBadge) {
+    nmdBadge.innerHTML = `<i class="fa-solid fa-award"></i> 達成: <strong>${nmdThisMonth}日</strong>`;
+  }
 }
 
 // ==========================================
@@ -714,6 +816,11 @@ function createCalendarCell({ dayNum, dateStr, dayOfWeek, isToday, isSelected, i
   if (isSelected) cell.classList.add('selected');
   cell.dataset.date = dateStr;
 
+  const isNmdAchieved = AppState.nmdDays.includes(dateStr);
+  if (isNmdAchieved) {
+    cell.classList.add('is-nmd');
+  }
+
   const dayData = summary.dailyData[dateStr] || { expense: 0, income: 0, count: 0 };
 
   let amountsHtml = '';
@@ -724,12 +831,19 @@ function createCalendarCell({ dayNum, dateStr, dayOfWeek, isToday, isSelected, i
     amountsHtml += `<span class="cal-amt-row cal-amt-expense">-¥${formatCurrency(dayData.expense)}</span>`;
   }
 
+  // ノーマネーデーのスタンプバッジ
+  let nmdStampHtml = '';
+  if (isNmdAchieved && dayData.expense === 0) {
+    nmdStampHtml = `<div class="cal-nmd-stamp"><i class="fa-solid fa-award"></i> やったね!</div>`;
+  }
+
   cell.innerHTML = `
     <div class="cal-day-header">
       <span class="cal-day-num">${dayNum}</span>
       ${dayData.count > 0 ? `<span class="cal-day-badge-count">${dayData.count}件</span>` : ''}
     </div>
     <div class="cal-day-amounts">
+      ${nmdStampHtml}
       ${amountsHtml}
     </div>
   `;
@@ -795,6 +909,9 @@ function selectWeekTotal(weekIndex, weekDates, weekExpense, weekIncome) {
   const summaryEl = document.getElementById('selectedDateSummary');
   const list = document.getElementById('selectedDateTxList');
   const empty = document.getElementById('selectedDateEmptyState');
+  const nmdBox = document.getElementById('nmdActionBox');
+  if (nmdBox) nmdBox.innerHTML = '';
+
   if (!label || !list || !empty) return;
 
   label.textContent = `第${weekIndex}週のまとめ`;
@@ -821,6 +938,7 @@ function renderSelectedDayDetails() {
   const summaryEl = document.getElementById('selectedDateSummary');
   const list = document.getElementById('selectedDateTxList');
   const empty = document.getElementById('selectedDateEmptyState');
+  const nmdBox = document.getElementById('nmdActionBox');
   if (!label || !list || !empty) return;
 
   const dateObj = new Date(AppState.selectedDate);
@@ -837,6 +955,56 @@ function renderSelectedDayDetails() {
   });
 
   summaryEl.innerHTML = `支出 <strong style="color:var(--expense-main);">¥${formatCurrency(expSum)}</strong> / 収入 <strong style="color:var(--income-main);">¥${formatCurrency(incSum)}</strong>`;
+
+  // ノーマネーデー（やったね！）アクションボックスの描画
+  if (nmdBox) {
+    const isNmdAchieved = AppState.nmdDays.includes(AppState.selectedDate);
+
+    if (expSum === 0) {
+      if (isNmdAchieved) {
+        nmdBox.innerHTML = `
+          <div class="nmd-card nmd-achieved">
+            <div class="nmd-achieved-top">
+              <div class="nmd-achieved-badge">
+                <i class="fa-solid fa-award"></i>
+                <span>やったね！ノーマネーデー達成中</span>
+              </div>
+              <button class="btn-nmd-cancel" id="toggleNmdBtn" title="達成の記録を解除する">
+                <i class="fa-solid fa-rotate-left"></i> 解除
+              </button>
+            </div>
+            <p class="nmd-achieved-desc">🎉 素晴らしい！この日はお金を使わずに過ごせました👏</p>
+          </div>
+        `;
+      } else {
+        nmdBox.innerHTML = `
+          <div class="nmd-card nmd-ready">
+            <div class="nmd-ready-header">
+              <span class="nmd-ready-icon">🎉</span>
+              <div>
+                <div class="nmd-ready-title">支出ゼロのノーマネーデー！</div>
+                <div class="nmd-ready-desc">お金を使わなかった日を記録してモチベーションを高めよう</div>
+              </div>
+            </div>
+            <button class="btn-nmd-trigger" id="toggleNmdBtn">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>やったね！を記録する</span>
+            </button>
+          </div>
+        `;
+      }
+
+      const toggleBtn = document.getElementById('toggleNmdBtn');
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+          toggleNoMoneyDay(AppState.selectedDate);
+        });
+      }
+    } else {
+      // 支出がある日はアクションボックスをクリア
+      nmdBox.innerHTML = '';
+    }
+  }
 
   list.innerHTML = '';
   if (dayRecords.length === 0) {
@@ -1368,6 +1536,13 @@ function handleTransactionFormSubmit(e) {
     syncToSpreadsheet('add', newRecord);
   }
 
+  if (type === 'expense' && amount > 0) {
+    if (AppState.nmdDays.includes(date)) {
+      AppState.nmdDays = AppState.nmdDays.filter(d => d !== date);
+      saveNmdDaysToStorage();
+    }
+  }
+
   AppState.selectedDate = date;
   const txYM = date.substring(0, 7);
   if (txYM !== AppState.currentMonth) {
@@ -1401,27 +1576,29 @@ function openMonthlyReportModal() {
   const [y, m] = AppState.currentMonth.split('-');
   document.getElementById('reportModalTitle').textContent = `${y}年 ${Number(m)}月の家計簿レポート`;
 
+  const nmdThisMonth = AppState.nmdDays.filter(d => d.startsWith(AppState.currentMonth)).length;
+
   let grade = 'A';
   let title = '順調な家計管理です！';
   let advice = '';
 
-  if (summary.totalExpense === 0 && summary.totalIncome === 0) {
+  if (summary.totalExpense === 0 && summary.totalIncome === 0 && nmdThisMonth === 0) {
     grade = '-';
     title = 'データがありません';
-    advice = 'カレンダーから収支を記録すると、詳細な分析が表示されます。';
+    advice = 'カレンダーから収支を記録したり、お金を使わなかった日に「やったね！」を記録すると、詳細な分析が表示されます。';
   } else if (summary.balance < 0) {
     grade = 'D';
     title = '赤字です！支出の見直しが必要です';
     advice = `今月は支出が収入を ¥${formatCurrency(Math.abs(summary.balance))} 上回っています。食費や交際費などの変動費を見直してみましょう。`;
-  } else if (summary.savingRate >= 30) {
+  } else if (summary.savingRate >= 30 || nmdThisMonth >= 10) {
     grade = 'S';
-    title = '素晴らしい貯蓄率です！';
-    advice = `収入の${summary.savingRate}%を貯蓄に回せています！この調子で堅実な資産形成を継続しましょう。`;
+    title = '素晴らしい家計管理です！';
+    advice = `ノーマネーデー（やったね！）を ${nmdThisMonth} 日達成し、堅実な資産形成ができています！この調子で継続しましょう。👏`;
     if (typeof confetti === 'function') confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
   } else {
     grade = 'A';
     title = '理想的な黒字バランスです！';
-    advice = `黒字額 ¥${formatCurrency(summary.balance)} (貯蓄率${summary.savingRate}%) を維持できています。`;
+    advice = `黒字額 ¥${formatCurrency(summary.balance)} (貯蓄率${summary.savingRate}%) / ノーマネーデー ${nmdThisMonth}日 達成を維持できています。`;
   }
 
   const sortedCats = Object.entries(summary.categoryExpenses).sort((a, b) => b[1] - a[1]);
@@ -1449,8 +1626,12 @@ function openMonthlyReportModal() {
         <div class="report-stat-val" style="color:var(--expense-main);">¥${formatCurrency(summary.totalExpense)}</div>
       </div>
       <div class="report-stat-box">
+        <span class="report-stat-label">ノーマネーデー</span>
+        <div class="report-stat-val" style="color:#f59e0b; font-weight:800;"><i class="fa-solid fa-award"></i> ${nmdThisMonth} 日達成</div>
+      </div>
+      <div class="report-stat-box">
         <span class="report-stat-label">最大支出項目</span>
-        <div class="report-stat-val" style="font-size:1rem; margin-top:4px;">${topCatText}</div>
+        <div class="report-stat-val" style="font-size:0.95rem; margin-top:4px;">${topCatText}</div>
       </div>
     </div>
     <div class="report-advice-box">
@@ -1495,7 +1676,12 @@ function exportDataAsCSV() {
 }
 
 function exportDataAsJSON() {
-  const data = { version: '4.0', exportDate: new Date().toISOString(), records: AppState.records };
+  const data = {
+    version: '4.1',
+    exportDate: new Date().toISOString(),
+    records: AppState.records,
+    nmdDays: AppState.nmdDays
+  };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
 
@@ -1516,10 +1702,16 @@ function importDataFromJSON(file) {
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
-      if (data && Array.isArray(data.records)) {
-        AppState.records = data.records;
-        saveRecordsToStorage();
-        showToast(`${data.records.length} 件のデータを復元しました！`, 'success');
+      if (data && (Array.isArray(data.records) || Array.isArray(data.nmdDays))) {
+        if (Array.isArray(data.records)) {
+          AppState.records = data.records;
+          saveRecordsToStorage();
+        }
+        if (Array.isArray(data.nmdDays)) {
+          AppState.nmdDays = data.nmdDays;
+          saveNmdDaysToStorage();
+        }
+        showToast(`データを正常に復元しました！`, 'success');
         renderAll();
       } else {
         showToast('無効なJSON形式です', 'error');
@@ -1532,9 +1724,11 @@ function importDataFromJSON(file) {
 }
 
 function resetAllData() {
-  if (!confirm('本当に全データを初期化しますか？\n保存されているすべての収支データが消去され、0件から開始できます。')) return;
+  if (!confirm('本当に全データを初期化しますか？\n保存されているすべての収支データおよびノーマネーデー記録が消去されます。')) return;
   AppState.records = [];
+  AppState.nmdDays = [];
   saveRecordsToStorage();
+  saveNmdDaysToStorage();
   showToast('全データをリセットしました。新しい家計簿を開始できます！', 'info');
   renderAll();
 }

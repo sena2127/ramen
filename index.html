@@ -20,7 +20,7 @@
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 
   <!-- App Styles (キャッシュバスター付き) -->
-  <link rel="stylesheet" href="style.css?v=20260815_sheets">
+  <link rel="stylesheet" href="style.css?v=20260815_nmd">
 </head>
 <body data-theme="light">
 
@@ -187,6 +187,9 @@
             </div>
             <div class="card-meta">
               <span class="meta-badge status-positive" id="summarySavingRate">貯蓄率: 0%</span>
+              <span class="meta-badge nmd-count-badge" id="summaryNmdBadge" title="支出ゼロを達成した日数">
+                <i class="fa-solid fa-award"></i> 達成: 0日
+              </span>
             </div>
           </div>
         </div>
@@ -225,6 +228,11 @@
               <button class="btn-secondary btn-sm" id="addTxForSelectedDateBtn">
                 <i class="fa-solid fa-plus"></i> この日に追加
               </button>
+            </div>
+
+            <!-- No Spend Day (やったね！ / NMD) Action Box -->
+            <div class="nmd-action-box" id="nmdActionBox">
+              <!-- Dynamically injected via JS -->
             </div>
 
             <div class="day-detail-body">

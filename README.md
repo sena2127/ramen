@@ -69,3 +69,102 @@ python3 -m http.server 8080
 # または Node.jsの場合
 npx serve .
 ```
+
+---
+
+## 🛠️ Build and Deployment
+
+### ローカル開発環境
+
+#### 前提条件
+- モダンブラウザ（Chrome, Firefox, Safari, Edge など）
+- ローカルサーバー（開発時は CORS エラー回避のため推奨）
+
+#### セットアップ
+
+```bash
+# プロジェクトのクローン
+git clone https://github.com/sena2127/ramen.git
+cd ramen
+
+# ローカルサーバーの起動
+# Python 3
+python3 -m http.server 8080
+
+# Node.js
+npx serve .
+```
+
+ブラウザで `http://localhost:8080` にアクセスしてください。
+
+---
+
+### 本番環境へのデプロイ
+
+このアプリケーションは完全に静的なファイル（HTML/CSS/JS）で構成されているため、以下のサービスで簡単にデプロイできます。
+
+#### 1. **GitHub Pages** （推奨・無料）
+
+```bash
+# リポジトリの設定
+git remote add origin https://github.com/sena2127/ramen.git
+git branch -M main
+git push -u origin main
+```
+
+GitHub リポジトリの設定で、`Settings` → `Pages` → `Deploy from a branch` を選択し、`main` ブランチを指定。
+
+#### 2. **Netlify** （無料・自動デプロイ）
+
+```bash
+# Netlifyにサインアップ後、以下のコマンド
+npm install -g netlify-cli
+netlify deploy --prod
+```
+
+#### 3. **Vercel** （無料・自動デプロイ）
+
+```bash
+npm install -g vercel
+vercel --prod
+```
+
+#### 4. **自前サーバー**
+
+すべてのファイル（`index.html`, `style.css`, `app.js`, `google-apps-script.js`）を Web サーバーの公開ディレクトリにアップロード。
+
+---
+
+### Google Apps Script（GAS）のセットアップ
+
+Google スプレッドシートとの連携を有効にするには：
+
+1. **Google シートの作成**
+   - Google ドライブで新しいスプレッドシートを作成
+
+2. **Apps Script エディタを開く**
+   - `拡張機能` → `Apps Script`
+
+3. **スクリプトをコピー**
+   - アプリ内の `⚙️ 設定` → `📝 GAS スクリプト取得` からコードをコピー
+   - またはこのリポジトリの `google-apps-script.js` の内容をコピー
+
+4. **デプロイ**
+   - スクリプトを保存
+   - `デプロイ` → `新しいデプロイ` → タイプ「ウェブアプリ」を選択
+   - 実行ユーザーとしてアクセス: `自分`
+   - 次のユーザーとして実行: `自分`
+
+5. **アプリに登録**
+   - 生成されたウェブアプリ URL をアプリの `⚙️ 設定` → `スプレッドシート URL` に貼り付け
+
+---
+
+### 環境変数・カスタマイズ
+
+#### LocalStorage の有効化
+- アプリケーションはデフォルトでブラウザの `LocalStorage` に自動保存
+- CORS 環境下でも動作
+
+#### Google Sheets URL
+- アプリ内から `⚙️ 設定` で Google Sheets リンクを指定可能
